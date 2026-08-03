@@ -2,18 +2,25 @@
 <html lang="fa" dir="rtl">
 <head>
 <meta charset="UTF-8">
-<title>گزارش فنی - [نام سهم]</title>
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<title>گزارش فنی تحلیل تکنیکال</title>
+<script src="https://unpkg.com/lightweight-charts@latest/dist/lightweight-charts.standalone.js"></script>
 <style>
-body{font-family:IRANSans, Tahoma, sans-serif; direction:rtl; margin:20px; }
-#chart{width:100%; height:400px; }
-section{margin-top:20px;}
-h2{color:#2c3e50;}
-ul{line-height:1.6;}
+@page { size: A4; margin: 15mm; }
+body { font-family: IRANSans, Tahoma, sans-serif; direction: rtl; margin: 0; padding: 0; background: #f5f5f5; }
+.container { max-width: 210mm; margin: 0 auto; background: #fff; padding: 20px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+h1 { text-align: center; color: #2c3e50; font-size: 24px; margin-bottom: 10px; }
+select { display: block; margin: 10px auto; padding: 8px 12px; font-size: 14px; font-family: inherit; }
+#chart { width: 100%; height: 400px; border: 1px solid #ddd; margin-bottom: 20px; }
+.section { margin-top: 20px; }
+.section h2 { color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 5px; font-size: 18px; }
+.section ol { line-height: 1.8; font-size: 13px; color: #333; }
+.section li { margin-bottom: 8px; }
+.indicator { display: inline-block; margin: 5px; padding: 5px 10px; background: #ecf0f1; border-radius: 4px; font-size: 12px; }
 </style>
 </head>
 <body>
-<h1>گزارش فنی</h1>
+<div class="container">
+<h1>گزارش فنی تحلیل تکنیکال</h1>
 <select id="symbolSelect">
 <option value="IRAN-AUTO">سهم خودرو</option>
 <option value="IRANAUTO-INDEX">خودرو اندیکس</option>
@@ -23,67 +30,97 @@ ul{line-height:1.6;}
 <option value="MARKET-INDEX">شاخص بازار</option>
 </select>
 <div id="chart"></div>
-<section id="analysis">
+<div id="indicators" style="text-align:center; margin-bottom:10px;"></div>
+<div class="section" id="analysis">
 <h2>تحلیل تکنیکال</h2>
 <ol>
-<li>هدف‌های قیمتی → دومین و پنجمین مقاومت برای 상승 و دومین و پنجمین حمایت برای düşाव</li>
-<li>مقاومت‌ها و حمایت‌ها برای رسیدن به اهداف → تجزیه و تحلیل سطوح قیمت</li>
-<li>احتمال صعود/نSymbolic شدن → مختل/Programming/Data-driven prognose</li>
-<li>توصیه برای سرمایه‌گذاران ریسک‌پذیر با بازده متوسط</li>
-<li>توصیه برای سرمایه‌گذاران ریسک متوسط با بازده پایین</li>
-<li>توصیه برای سرمایه‌گذاران ریسک‌گرس با بازده پایین</li>
-<li>توصیه برای سرمایه‌گذاران ریسک‌گرس با بازده متوسط</li>
+<li id="target">هدف‌های قیمتی: ...</li>
+<li id="resistance">مقاومت‌ها برای رسیدن به اهداف: ...</li>
+<li id="probability">احتمال صعود و نزول: ...</li>
+<li id="risk1">توصیه برای سرمایه‌گذاران ریسک‌پذیر: ...</li>
+<li id="risk2">توصیه برای سرمایه‌گذاران با ریسک متوسط (بازده متوسط): ...</li>
+<li id="risk3">توصیه برای سرمایه‌گذاران با ریسک متوسط (بازده پایین): ...</li>
+<li id="risk4">توصیه برای سرمایه‌گذاران با ریسک گریز (بازده پایین): ...</li>
+<li id="risk5">توصیه برای سرمایه‌گذاران با ریسک گریز (بازده متوسط): ...</li>
 </ol>
-</section>
+</div>
+</div>
 <script>
-document.getElementById('symbolSelect').addEventListener('change', function(){
- const sym = this.value;
- // اینجا می‌توانید داده‌های واقعی را بارگذاری کنید
- // برای امثال، یک داده نمونه برای نمودار کل کندل استیک را بارگذاری کنید
- const sample = {
-   label: sym,
-   ohlc: [
-     [1,2,3,4], [5,6,7,8], [9,10,11,12] // مقادیر نمونه
-   ],
-   support: 100,
-   resistance: 150
- };
- drawChart(sample);
+document.getElementById('symbolSelect').addEventListener('change', function() {
+    const sym = this.value;
+    fetch(sym + '_data.json')
+        .then(r => r.json())
+        .then(data => {
+            renderChart(data);
+            renderAnalysis(data);
+        })
+        .catch(err => console.error('Error loading data:', err));
 });
-function drawChart(data){
- const ctx = document.getElementById('chart').getContext('2d');
- const chart = new Chart(ctx,{
-   type:'candlestick',
-   data:{
-     datasets:[{
-        label: data.label,
-        data: data.ohlc.map(item=>({x:item[0], high:item[1], low:item[2], open:item[3], close:item[4]})),
-        backgroundColor: 'rgba(75, 192, 192, 0.6)'
-     }]
-   },
-   options:{
-     scales:{
-       x:{title:{display:true, text:'تاریخ'}},
-       y:{title:{display:true, text:'قیمت'}}
-     },
-     plugins:{
-       tooltip:{mode:'index', intersect:false}
-     }
-   }
- });
- // رسم سطوح حمایت و مقاومت به عنوان خطوط افقی
- const ctx2 = ctx;
- ctx2.strokeStyle = 'rgba(255,0,0,0.7)';
- ctx2.beginPath();
- ctx2.setLineDash([5,5]);
- ctx2.moveTo(0, (data.support/100)*ctx2.canvas.height);
- ctx2.lineTo(ctx2.canvas.width, (data.support/100)*ctx2.canvas.height);
- ctx2.stroke();
- ctx2.beginPath();
- ctx2.moveTo(0, (data.resistance/100)*ctx2.canvas.height);
- ctx2.lineTo(ctx2.canvas.width, (data.resistance/100)*ctx2.canvas.height);
- ctx2.stroke();
+
+function renderChart(data) {
+    const chart = LightweightCharts.createChart(document.getElementById('chart'), {
+        width: document.getElementById('chart').clientWidth,
+        height: 400,
+        layout: { background: { color: '#ffffff' }, textColor: '#333333' },
+        grid: { vertLines: { color: '#e0e0e0' }, horzLines: { color: '#e0e0e0' } },
+        rightPriceScale: { borderColor: '#cccccc' },
+        timeScale: { borderColor: '#cccccc' },
+    });
+    const candleSeries = chart.addCandlestickSeries({
+        upColor: '#26a69a', downColor: '#ef5350', borderUpColor: '#26a69a', borderDownColor: '#ef5350',
+        wickUpColor: '#26a69a', wickDownColor: '#ef5350',
+    });
+    const candleData = data.map(d => ({
+        time: d.Date,
+        open: d.Open,
+        high: d.High,
+        low: d.Low,
+        close: d.Close,
+    }));
+    candleSeries.setData(candleData);
+    const maSeries = chart.addLineSeries({ color: '#2980b9', lineWidth: 2, title: 'MA100' });
+    const maData = data.map(d => ({ time: d.Date, value: d.MA100 })).filter(d => d.value != null);
+    maSeries.setData(maData);
+    const lastRow = data[data.length - 1];
+    if (lastRow && lastRow.Resistances) {
+        const resistances = lastRow.Resistances.split(',').map(Number).filter(n => !isNaN(n));
+        resistances.forEach(r => {
+            candleSeries.createPriceLine({ price: r, color: 'rgba(239,83,80,0.7)', lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Dashed, title: 'مقاومت ' + r.toFixed(2) });
+        });
+    }
+    if (lastRow && lastRow.Supports) {
+        const supports = lastRow.Supports.split(',').map(Number).filter(n => !isNaN(n));
+        supports.forEach(s => {
+            candleSeries.createPriceLine({ price: s, color: 'rgba(39,174,96,0.7)', lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Dashed, title: 'حمایت ' + s.toFixed(2) });
+        });
+    }
+    chart.timeScale().fitContent();
 }
+
+function renderAnalysis(data) {
+    const last = data[data.length - 1];
+    if (!last) return;
+    const rsi14 = last.RSI_14;
+    const macdHist = last.MACD_Hist;
+    const close = last.Close;
+    const ma100 = last.MA100;
+    const trend = close > ma100 ? 'صعودی' : 'نزولی';
+    const rsiSignal = rsi14 < 30 ? 'اشباع خرید (صعودی)' : rsi14 > 70 ? 'اشباع فروش (نزولی)' : 'خنثی';
+    const macdSignal = macdHist > 0 ? 'مثبت (صعودی)' : 'منفی (نزولی)';
+    const resistances = last.Resistances ? last.Resistances.split(',').map(Number).filter(n => !isNaN(n)) : [];
+    const supports = last.Supports ? last.Supports.split(',').map(Number).filter(n => !isNaN(n)) : [];
+    const targetResist = resistances.length >= 5 ? resistances[4] : resistances[resistances.length - 1] || '-';
+    const targetSupport = supports.length >= 5 ? supports[4] : supports[supports.length - 1] || '-';
+    document.getElementById('target').innerHTML = `هدف‌های قیمتی: در صورت صعود، هدف دومین و پنجمین مقاومت (${resistances[1] || '-'} و ${targetResist})؛ در صورت افت، هدف دومین و پنجمین حمایت (${supports[1] || '-'} و ${targetSupport}).`;
+    document.getElementById('resistance').innerHTML = `مقاومت‌ها برای رسیدن به اهداف: سطوح مقاومت شناسایی شده در بالای قیمت فعلی با فاصله ۵٪ و وزن حجم بالا.`;
+    document.getElementById('probability').innerHTML = `احتمال صعود: ${trend === 'صعودی' ? 'بالا' : 'متوسط'} | احتمال نزول: ${trend === 'نزولی' ? 'بالا' : 'متوسط'} — بر اساس MA100 (${ma100 ? ma100.toFixed(2) : '-'})، RSI(14) = ${rsi14 ? rsi14.toFixed(2) : '-'} (${rsiSignal})، MACD Histogram = ${macdHist ? macdHist.toFixed(2) : '-'} (${macdSignal}).`;
+    document.getElementById('risk1').innerHTML = `توصیه برای سرمایه‌گذاران ریسک‌پذیر: با توجه به ${trend} بودن روند، پیشنهاد ورود به موقعیت خرید با حد ضرر زیر حمایت نزدیک و هدف دومین مقاومت.`;
+    document.getElementById('risk2').innerHTML = `توصیه برای سرمایه‌گذاران با ریسک متوسط (بازده متوسط): ورود با نسبت ریسک به بازده ۱:۲ و حد ضرر محافظتی.`;
+    document.getElementById('risk3').innerHTML = `توصیه برای سرمایه‌گذاران با ریسک متوسط (بازده پایین): ورود با حجم کمتر و حد ضرر تنگ.`;
+    document.getElementById('risk4').innerHTML = `توصیه برای سرمایه‌گذاران با ریسک گریز (بازده پایین): صبر برای تأیید سیگنال صعودی قبل از ورود.`;
+    document.getElementById('risk5').innerHTML = `توصیه برای سرمایه‌گذاران با ریسک گریز (بازده متوسط): استفاده از حد ضرر بسیار تنگ و توجه به سطوح حمایت نزدیک.`;
+}
+document.getElementById('symbolSelect').dispatchEvent(new Event('change'));
 </script>
 </body>
 </html>
