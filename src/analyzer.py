@@ -37,7 +37,8 @@ class TechnicalAnalyzer:
                 stock=symbol,
                 start_date='1400-01-01',
                 end_date='1400-12-29',
-                adjust_price=True
+                adjust_price=True,
+                ignore_date=True
             )
             if df is not None and not df.empty:
                 df = self._process_dataframe(df)
@@ -52,7 +53,8 @@ class TechnicalAnalyzer:
                 stock=symbol,
                 start_date='1400-01-01',
                 end_date='1400-01-02',
-                adjust_price=True
+                adjust_price=True,
+                ignore_date=True
             )
             return df is not None and not df.empty
         except:
@@ -92,15 +94,17 @@ def calculate_macd(series, fast=12, slow=26, signal=9):
 def calculate_cci(high, low, close, period):
     typical_price = (high + low + close) / 3
     sma = typical_price.rolling(window=period).mean()
-    mean_dev = (high - low).abs().rolling(window=period).mean()
+    mean_dev = abs(typical_price - sma).rolling(window=period).mean()
     cci = (typical_price - sma) / (0.015 * mean_dev)
     return cci
 
 def calculate_mfi(high, low, close, volume, period):
     tp = (high + low + close) / 3
     rmf = tp * volume
-    positive_flow = rmf.where(rmf > 0, 0)
-    negative_flow = rmf.where(rmf < 0, 0).abs()
+    # Positive money flow: TP > previous TP
+    positive_flow = rmf.where(tp > tp.shift(1), 0)
+    # Negative money flow: TP < previous TP
+    negative_flow = rmf.where(tp < tp.shift(1), 0)
     positive_sum = positive_flow.rolling(window=period, min_periods=1).sum()
     negative_sum = negative_flow.rolling(window=period, min_periods=1).sum()
     money_ratio = positive_sum / (negative_sum + 1e-9)
@@ -111,7 +115,7 @@ def calculate_bbands(series, period, std_dev):
     sma = series.rolling(window=period).mean()
     std = series.rolling(window=period).std()
     upper = sma + std_dev * std
-    lower = sma - std
+    lower = sma - std_dev * std
     return upper, lower
 
 def calculate_adx(high, low, close, period):
@@ -119,14 +123,19 @@ def calculate_adx(high, low, close, period):
     tr2 = (high - close.shift()).abs()
     tr3 = (low - close.shift()).abs()
     tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
-    up_move = (high - high.shift()).where(high > high.shift(), 0)
-    down_move = (low.shift() - low).where(low < low.shift(), 0)
-    plus_dm = up_move.rolling(window=period).sum()
-    minus_dm = down_move.rolling(window=period).sum()
-    plus_di = (plus_dm / tr).replace([np.inf, -np.inf], 0) * 100
-    minus_di = (minus_dm / tr).replace([np.inf, -np.inf], 0) * 100
-    dx = (plus_di - minus_di) / (plus_di + minus_di + 1e-9) * 100
-    adx = dx.rolling(window=period).mean()
+    up_move = high - high.shift()
+    down_move = low.shift() - low
+    plus_dm = up_move.where((up_move > down_move) & (up_move > 0), 0.0)
+    minus_dm = down_move.where((down_move > up_move) & (down_move > 0), 0.0)
+    # Use Wilder's smoothing (EMA with alpha=1/period)
+    alpha = 1.0 / period
+    plus_dm_smoothed = plus_dm.ewm(alpha=alpha, min_periods=period).mean()
+    minus_dm_smoothed = minus_dm.ewm(alpha=alpha, min_periods=period).mean()
+    tr_smoothed = tr.ewm(alpha=alpha, min_periods=period).mean()
+    plus_di = (plus_dm_smoothed / tr_smoothed).replace([np.inf, -np.inf], 0) * 100
+    minus_di = (minus_dm_smoothed / tr_smoothed).replace([np.inf, -np.inf], 0) * 100
+    dx = (plus_di - minus_di).abs() / (plus_di + minus_di + 1e-9) * 100
+    adx = dx.ewm(alpha=alpha, min_periods=period).mean()
     return adx
 
 def calculate_all_indicators(df):
@@ -206,9 +215,10 @@ if __name__ == '__main__':
                     'BB_50_upper', 'BB_50_lower', 'BB_100_upper', 'BB_100_lower',
                     'ADX_9', 'ADX_14', 'ADX_21', 'ADX_35'
                 ]
+                json_columns = list(dict.fromkeys(json_columns))  # Remove duplicates
                 json_columns = [col for col in json_columns if col in recent.columns]
                 recent = recent[json_columns]
-                json_path = f'{symbol}_data.json'
+                json_path = f'../data/{symbol}_data.json'
                 recent.to_json(json_path, orient='records', date_format='iso')
                 print(f'\tSaved data JSON to {json_path}')
                 if not recent['Resistances'].isnull().all():
