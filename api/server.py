@@ -1,8 +1,21 @@
 import os
 import json
 import datetime
+import ssl
 from flask import Flask, jsonify, send_from_directory, request, send_file
 import pandas as pd
+import jdatetime
+import finpy_tse as tse
+import warnings
+warnings.filterwarnings('ignore')
+
+# SSL context for finpy_tse
+try:
+    _create_unverified_https_context = ssl._create_unverified_context
+except AttributeError:
+    pass
+else:
+    ssl._create_default_https_context = _create_unverified_https_context
 
 app = Flask(__name__, static_folder='../frontend', template_folder='../frontend')
 
@@ -31,6 +44,90 @@ def get_symbol_data(symbol):
     if 'Date' in df.columns:
         df['Date'] = pd.to_datetime(df['Date'])
         df = df.sort_values('Date')
+    
+    return df
+
+# Helper function to fetch raw data from finpy_tse
+def fetch_symbol_data(symbol):
+    """Fetch fresh data for a symbol from TSE."""
+    try:
+        # Calculate date range (4 years back from today)
+        import jdatetime
+        today = jdatetime.date.today()
+        end_date = today.strftime('%Y-%m-%d')
+        
+        # Go back 4 years
+        start_date = today.replace(year=today.year - 4)
+        start_date_str = start_date.strftime('%Y-%m-%d')
+        
+        df = tse.Get_Price_History(
+            stock=symbol,
+            start_date=start_date_str,
+            end_date=end_date,
+            ignore_date=True,
+            adjust_price=True
+        )
+        
+        if df is not None and not df.empty:
+            # Convert Jalali dates to ISO format
+            df = df.reset_index()
+            if 'J-Date' in df.columns:
+                def jalali_to_iso(jdate_str):
+                    try:
+                        parts = str(jdate_str).split('-')
+                        if len(parts) == 3:
+                            jy, jm, jd = int(parts[0]), int(parts[1]), int(parts[2])
+                            gdate = jdatetime.date(jy, jm, jd).togregorian()
+                            return gdate.isoformat()
+                    except:
+                        return None
+                
+                df['Date'] = df['J-Date'].apply(jalali_to_iso)
+                df = df.drop(columns=['J-Date'])
+            else:
+                # If no J-Date column, try using the index
+                df['Date'] = df.index
+            
+            # Ensure proper date handling
+            df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
+            df = df.dropna(subset=['Date'])  # Remove rows with invalid dates
+            df = df.sort_values('Date')
+            df['Date'] = df['Date'].dt.strftime('%Y-%m-%d')
+            
+            # Calculate indicators
+            df = calculate_indicators(df)
+            
+            return df
+    except Exception as e:
+        print(f"Error fetching {symbol}: {e}")
+        return None
+
+def calculate_indicators(df):
+    """Calculate common technical indicators."""
+    if 'Close' in df.columns:
+        # Simple Moving Averages
+        df['SMA_20'] = df['Close'].rolling(window=20).mean()
+        df['SMA_50'] = df['Close'].rolling(window=50).mean()
+        
+        # RSI
+        delta = df['Close'].diff()
+        gain = delta.where(delta > 0, 0).rolling(window=14).mean()
+        loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+        rs = gain / loss
+        df['RSI'] = 100 - (100 / (1 + rs))
+        
+        # MACD
+        exp1 = df['Close'].ewm(span=12, adjust=False).mean()
+        exp2 = df['Close'].ewm(span=26, adjust=False).mean()
+        df['MACD'] = exp1 - exp2
+        df['Signal'] = df['MACD'].ewm(span=9, adjust=False).mean()
+        df['Histogram'] = df['MACD'] - df['Signal']
+        
+        # Bollinger Bands
+        df['BB_Middle'] = df['Close'].rolling(window=20).mean()
+        bb_std = df['Close'].rolling(window=20).std()
+        df['BB_Upper'] = df['BB_Middle'] + (bb_std * 2)
+        df['BB_Lower'] = df['BB_Middle'] - (bb_std * 2)
     
     return df
 
@@ -99,6 +196,28 @@ def get_symbol_indicators(symbol):
         # Return last 1000 records to limit response size
         df_limited = df.tail(1000) if len(df) > 1000 else df
         return jsonify(df_limited.to_dict(orient='records'))
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# New endpoint to fetch data from TSE
+@app.route('/api/fetch/<symbol>')
+def fetch_symbol_data_endpoint(symbol):
+    """Fetch data from TSE and save it locally."""
+    try:
+        df = fetch_symbol_data(symbol)
+        if df is None or df.empty:
+            return jsonify({'error': f'Failed to fetch data for symbol {symbol}'}), 404
+        
+        # Save to JSON file for future use
+        json_path = os.path.join(DATA_DIR, f"{symbol}_data.json")
+        df.to_json(json_path, orient='records', date_format='iso')
+        
+        return jsonify({
+            'success': True,
+            'symbol': symbol,
+            'records': len(df),
+            'message': f'Data for {symbol} fetched and saved successfully'
+        })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -208,6 +327,13 @@ def download_file(symbol, filetype):
 @app.route('/')
 def index():
     return send_from_directory('../frontend', 'index.html')
+
+
+@app.route('/api/test')
+def test():
+    """Simple test endpoint to verify server is running."""
+    return jsonify({'status': 'ok', 'message': 'Server is running'})
+
 
 @app.route('/<path:path>')
 def static_files(path):
