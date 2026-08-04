@@ -1,6 +1,7 @@
 import sys
 if hasattr(sys.stdout, 'reconfigure'):
     sys.stdout.reconfigure(encoding='utf-8')
+if hasattr(sys.stderr, 'reconfigure'):
     sys.stderr.reconfigure(encoding='utf-8')
 
 import ssl
@@ -13,10 +14,11 @@ else:
 
 import finpy_tse
 import pandas as pd
+import jdatetime
 import warnings
 warnings.filterwarnings('ignore')
 
-log_file = 'errors.log'
+log_file = 'logs/errors.log'
 
 def get_price_history(stock, start_date='1400-01-01', end_date='1403-12-29', adjust_price=True):
     try:
@@ -30,7 +32,19 @@ def get_price_history(stock, start_date='1400-01-01', end_date='1403-12-29', adj
         if df is not None and not df.empty:
             # Reset index to get J-Date as column
             df = df.reset_index()
-            df['Weekday'] = pd.to_datetime(df['J-Date']).dt.day_name()
+            # Convert Jalali dates to Gregorian for weekday extraction
+            def jalali_to_gregorian(date_str):
+                parts = str(date_str).split('-')
+                if len(parts) == 3:
+                    try:
+                        jy, jm, jd = int(parts[0]), int(parts[1]), int(parts[2])
+                        return jdatetime.date(jy, jm, jd).togregorian()
+                    except:
+                        return None
+                return None
+            df['Gregorian_Date'] = df['J-Date'].apply(jalali_to_gregorian)
+            df['Weekday'] = pd.to_datetime(df['Gregorian_Date']).dt.day_name()
+            df = df.drop(columns=['Gregorian_Date'])
             return df[['J-Date', 'Weekday', 'Open', 'High', 'Low', 'Close', 'Final',
                       'Volume', 'Value', 'No', 'Ticker', 'Name', 'Market',
                       'Adj Open', 'Adj High', 'Adj Low', 'Adj Close', 'Adj Final']]
