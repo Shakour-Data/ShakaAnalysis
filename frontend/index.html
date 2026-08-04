@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>سیستم تجزیه و تحلیل بازار مالی - داشبورد حرفه‌ای</title>
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <!-- DataTables CSS -->
+    <link href="https://cdn.datatables.net/1.13.7/css/dataTables.bootstrap5.min.css" rel="stylesheet">
+    
+    <style>
+        :root {
+            --bs-primary: #2563eb;
+            --bs-secondary: #647494;
+            --bs-success: #10b981;
+            --bs-danger: #ef4444;
+            --bs-warning: #f59e0b;
+            --bs-info: #06b6d4;
+            --bs-light: #f8fafc;
+            --bs-dark: #0f172a;
+        }
+        
+        body {
+            font-family: 'Tahoma', sans-serif;
+            background: linear-gradient(135deg, #f0f4f8 0%, #e2e8f0 100%);
+            margin: 0;
+            padding: 0;
+            color: var(--bs-dark);
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%);
+            color: white;
+            padding: 1rem 2rem;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+        }
+        
+        .header h1 {
+            margin: 0;
+            font-size: 1.5rem;
+            font-weight: 700;
+        }
+        
+        .header .subtitle {
+            font-size: 0.9rem;
+            opacity: 0.9;
+        }
+        
+        .container-fluid {
+            padding: 1.5rem;
+        }
+        
+        .card {
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+            margin-bottom: 1.5rem;
+            border: none;
+            background: white;
+        }
+        
+        .card-header {
+            background: white;
+            border-bottom: 2px solid #e2e8f0;
+            padding: 0.75rem 1.25rem;
+            font-weight: 700;
+        }
+        
+        .card-body {
+            padding: 1.25rem;
+        }
+        
+        .controls-section {
+            background: white;
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+        }
+        
+        .chart-container {
+            position: relative;
+            height: 500px;
+            margin-bottom: 2rem;
+        }
+        
+        .table-container {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        
+        .indicator-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+        
+        .indicator-card {
+            background: white;
+            border-radius: 10px;
+            padding: 1rem;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+            border-left: 4px solid var(--bs-info);
+        }
+        
+        .indicator-card.rsi {
+            border-left-color: var(--bs-primary);
+        }
+        
+        .indicator-card.macd {
+            border-left-color: var(--bs-warning);
+        }
+        
+        .indicator-name {
+            font-weight: 700;
+            color: var(--bs-secondary);
+        }
+        
+        .indicator-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+        }
+        
+        .indicator-value.neutral { color: var(--bs-info); }
+        .indicator-value.overbought { color: var(--bs-danger); }
+        .indicator-value.oversold { color: var(--bs-success); }
+        .indicator-value.bullish { color: var(--bs-success); }
+        .indicator-value.bearish { color: var(--bs-danger); }
+        
+        .analysis-section {
+            margin-top: 2rem;
+        }
+        
+        .analysis-editor {
+            width: 100%;
+            min-height: 200px;
+            padding: 1rem;
+            border: 2px dashed #cbd5e1;
+            border-radius: 8px;
+            font-family: 'Tahoma', sans-serif;
+            font-size: 0.95rem;
+            resize: vertical;
+            transition: border-color 0.3s;
+        }
+        
+        .analysis-editor:focus {
+            outline: none;
+            border-color: var(--bs-primary);
+            box-shadow: 0 0 0 3px rgba(37, 99, 237, 0.1);
+        }
+        
+        .symbol-search {
+            position: relative;
+        }
+        
+        .symbol-search .dropdown-menu {
+            max-height: 200px;
+            overflow-y: auto;
+            width: 100%;
+        }
+        
+        .btn-primary {
+            background: var(--bs-primary);
+            border: none;
+            padding: 0.5rem 1.25rem;
+        }
+        
+        .btn-success {
+            background: var(--bs-success);
+            border: none;
+            padding: 0.5rem 1.25rem;
+        }
+        
+        .btn-warning {
+            background: var(--bs-warning);
+            border: none;
+            padding: 0.5rem 1.25rem;
+            color: white;
+        }
+        
+        .oscillator-chart {
+            height: 200px;
+            margin-bottom: 2rem;
+        }
+        
+        .tab-content {
+            padding: 1rem;
+        }
+        
+        .nav-tabs .nav-link.active {
+            background: var(--bs-primary);
+            color: white;
+            border-color: var(--bs-primary);
+        }
+        
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(255, 255, 255, 0.9);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+        }
+        
+        .loading-text {
+            font-size: 1.5rem;
+            color: var(--bs-primary);
+        }
+        
+        @media (max-width: 768px) {
+            .container-fluid {
+                padding: 0.75rem;
+            }
+            .chart-container {
+                height: 300px;
+            }
+        }
+        
+        .table th {
+            background: var(--bs-primary);
+            color: white;
+            position: sticky;
+            top: 0;
+        }
+        
+        .pagination {
+            justify-content: center;
+        }
+        
+        .price-up {
+            color: var(--bs-success);
+        }
+        .price-down {
+            color: var(--bs-danger);
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <div class="header">
+        <h1><i class="fas fa-chart-line me-2"></i>سیستم تجزیه و تحلیل بازار مالی</h1>
+        <div class="subtitle">داشبورد حرفه‌ای با نمودارها، جدول قیمت‌ها و اندیکاتورها</div>
+    </div>
+
+    <div class="container-fluid">
+        <!-- Symbol Search Section -->
+        <div class="controls-section">
+            <div class="row g-3 align-items-end">
+                <div class="col-md-4">
+                    <label for="symbolInput" class="form-label fw-bold">نام سهم / شاخص</label>
+                    <div class="symbol-search">
+                        <input type="text" id="symbolInput" class="form-control" placeholder="مثال: فولاد، خودرو، شاخص کل">
+                        <div id="symbolDropdown" class="dropdown-menu" style="display: none;"></div>
+                    </div>
+                </div>
+                <div class="col-md-2">
+                    <label for="dateRange" class="form-label fw-bold">بازه زمانی</label>
+                    <select id="dateRange" class="form-select">
+                        <option value="1y">1 سال اخیر</option>
+                        <option value="2y">2 سال اخیر</option>
+                        <option value="3y">3 سال اخیر</option>
+                        <option value="4y" selected>4 سال اخیر</option>
+                        <option value="all">همه داده‌ها</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label for="chartType" class="form-label fw-bold">نوع نمودار</label>
+                    <select id="chartType" class="form-select">
+                        <option value="line">خطی</option>
+                        <option value="candlestick">شمعی</option>
+                        <option value="bar">ستونی</option>
+                    </select>
+                </div>
+                <div class="col-md-4 d-flex gap-2">
+                    <button id="fetchDataBtn" class="btn btn-primary">
+                        <i class="fas fa-sync-alt"></i> دریافت داده‌های خام
+                    </button>
+                    <button id="loadDataBtn" class="btn btn-success">
+                        <i class="fas fa-folder-open"></i> بارگذاری داده‌ها
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="row">
+            <!-- Price Chart -->
+            <div class="col-lg-12">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <span>نمودار قیمت</span>
+                        <div class="btn-group" role="group">
+                            <button class="btn btn-outline-primary btn-sm toggle-indicator" data-ind="rsi">RSI</button>
+                            <button class="btn btn-outline-warning btn-sm toggle-indicator" data-ind="macd">MACD</button>
+                            <button class="btn btn-outline-info btn-sm toggle-indicator" data-ind="bb">باند بولینگر</button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div id="priceChart" class="chart-container">
+                            <canvas id="priceChartCanvas"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Oscillator Charts -->
+        <div class="row">
+            <div class="col-lg-6">
+                <div class="card">
+                    <div class="card-header">RSI (شاخص قدرت نسبی)</div>
+                    <div class="card-body">
+                        <div class="oscillator-chart">
+                            <canvas id="rsiChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-6">
+                <div class="card">
+                    <div class="card-header">MACD (همگرایی واگرایی میانه حرکتی)</div>
+                    <div class="card-body">
+                        <div class="oscillator-chart">
+                            <canvas id="macdChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Indicator Cards -->
+        <div class="row">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">اندیکاتورهای کلیدی</div>
+                    <div class="card-body">
+                        <div class="indicator-grid" id="indicatorGrid">
+                            <div class="indicator-card rsi">
+                                <div class="indicator-name">RSI (14)</div>
+                                <div class="indicator-value neutral" id="rsiValue">--</div>
+                            </div>
+                            <div class="indicator-card macd">
+                                <div class="indicator-name">MACD</div>
+                                <div class="indicator-value" id="macdValue">--</div>
+                            </div>
+                            <div class="indicator-card">
+                                <div class="indicator-name">SMA 20</div>
+                                <div class="indicator-value" id="sma20Value">--</div>
+                            </div>
+                            <div class="indicator-card">
+                                <div class="indicator-name">SMA 50</div>
+                                <div class="indicator-value" id="sma50Value">--</div>
+                            </div>
+                            <div class="indicator-card">
+                                <div class="indicator-name">بازه قیمت</div>
+                                <div class="indicator-value" id="priceRangeValue">--</div>
+                            </div>
+                            <div class="indicator-card">
+                                <div class="indicator-name">حجم معاملات</div>
+                                <div class="indicator-value" id="volumeValue">--</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tabs for Price Table and Analysis -->
+        <div class="row">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <ul class="nav nav-tabs" id="dataTabs" role="tablist">
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link active" id="price-table-tab" data-bs-toggle="tab" data-bs-target="#priceTable" type="button">جدول قیمت‌ها</button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="analysis-tab" data-bs-toggle="tab" data-bs-target="#analysis" type="button">تحلیل و یادداشت</button>
+                            </li>
+                        </ul>
+                    </div>
+                    <div class="card-body">
+                        <div class="tab-content" id="dataTabsContent">
+                            <div class="tab-pane fade show active" id="priceTable">
+                                <div class="table-container">
+                                    <table id="priceTable" class="table table-striped table-hover" style="width: 100%;">
+                                        <thead>
+                                            <tr>
+                                                <th>تاریخ</th>
+                                                <th>باز</th>
+                                                <th>بالا</th>
+                                                <th>پایین</th>
+                                                <th>بسته</th>
+                                                <th>حجم</th>
+                                                <th>MACD</th>
+                                                <th>RSI</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody></tbody>
+                                    </table>
+                                </div>
+                                <div class="d-flex justify-content-between align-items-center mt-3">
+                                    <div id="downloadButtons" class="d-flex gap-2">
+                                        <button id="downloadPrice" class="btn btn-warning btn-sm">
+                                            <i class="fas fa-download"></i> دانلود قیمت‌ها
+                                        </button>
+                                        <button id="downloadIndicators" class="btn btn-warning btn-sm">
+                                            <i class="fas fa-download"></i> دانلود اندیکاتورها
+                                        </button>
+                                        <button id="downloadFull" class="btn btn-warning btn-sm">
+                                            <i class="fas fa-download"></i> دانلود همه داده‌ها
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="tab-pane fade" id="analysis">
+                                <div class="analysis-section">
+                                    <div class="mb-3">
+                                        <label for="analysisEditor" class="form-label fw-bold">تحلیل تخصصی شما</label>
+                                        <textarea id="analysisEditor" class="analysis-editor" placeholder="تحلیل خود را وارد کنید..."></textarea>
+                                    </div>
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <div>
+                                            <button id="saveAnalysisBtn" class="btn btn-success">
+                                                <i class="fas fa-save"></i> ذخیره تحلیل
+                                            </button>
+                                            <button id="postAnalysisBtn" class="btn btn-primary">
+                                                <i class="fas fa-share"></i> ارسال/به اشتراک
+                                            </button>
+                                        </div>
+                                        <div id="saveStatus" class="text-success" style="display: none;">
+                                            <i class="fas fa-check-circle"></i> ذخیره شد!
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="loading-overlay" style="display: none;">
+        <div class="loading-text">
+            <i class="fas fa-spinner fa-spin"></i> در حال بارگذاری داده‌ها...
+        </div>
+    </div>
+
+    <!-- jQuery and Bootstrap Bundle -->
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- DataTables JS -->
+    <script src="https://cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.7/js/dataTables.bootstrap5.min.js"></script>
+    <!-- Main JS -->
+    <script src="js/main.js"></script>
+</body>
+</html>
