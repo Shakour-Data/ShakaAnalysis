@@ -59,4 +59,4 @@ try:
     print(f'  Shape: {df.shape}')
     print('Sample:', df.head(5).to_string())
 except Exception as e:
-    print(f'  Error: {e[:500]}')
+    print(f'  Error: {str(e)[:500]}')
