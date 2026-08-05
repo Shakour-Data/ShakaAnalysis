@@ -160,6 +160,11 @@ reports/*.xlsx
 reports/*.html
 logs/*.log
 
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
 # Debug/test files
 debug_*.py
 test_*.py
