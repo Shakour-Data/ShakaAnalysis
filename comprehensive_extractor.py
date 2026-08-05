@@ -51,11 +51,11 @@ requests.Session.post = patched_session_post
 
 # Disable SSL warnings
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-print("✓ SSL patch applied successfully")
+print("[OK] SSL patch applied successfully")
 
 # Now import finpy_tse
 import finpy_tse
-print("✓ finpy_tse imported successfully")
+print("[OK] finpy_tse imported successfully")
 
 # ==================== SSL PATCH END ====================
 
@@ -81,7 +81,7 @@ def extract_all_symbols():
             print("  No symbols found in market list")
             return []
             
-        print(f"  ✓ Found {len(df)} symbols in market list")
+        print(f"  [OK] Found {len(df)} symbols in market list")
         
         # Process symbols
         symbols = []
@@ -160,14 +160,14 @@ def extract_all_symbols():
                 symbols.append(idx_obj)
                 seen_symbols.add(symbol_clean)
         
-        print(f"  ✓ Total symbols extracted: {len(symbols)}")
+        print(f"  [OK] Total symbols extracted: {len(symbols)}")
         print(f"    - Stock symbols: {len([s for s in symbols if s['type'] == 'Stock'])}")
         print(f"    - Index symbols: {len([s for s in symbols if s['type'] == 'Index'])}")
         
         return symbols
         
     except Exception as e:
-        print(f"  ✗ Error extracting symbols: {str(e)}")
+        print(f"  [ERROR] Error extracting symbols: {str(e)}")
         return []
 
 def extract_symbol_data(symbol, symbol_name):
@@ -294,7 +294,7 @@ def extract_symbol_data(symbol, symbol_name):
         return processed_data
         
     except Exception as e:
-        print(f"      ✗ Error: {str(e)[:200]}")
+        print(f"      [ERROR] Error: {str(e)[:200]}")
         return None
 
 def create_comprehensive_database():
@@ -307,7 +307,7 @@ def create_comprehensive_database():
     symbols = extract_all_symbols()
     
     if not symbols:
-        print("  ✗ Failed to extract symbols")
+        print("  [ERROR] Failed to extract symbols")
         return None
     
     # Create comprehensive database structure
@@ -372,7 +372,7 @@ def create_comprehensive_database():
                 
         else:
             failed_symbols += 1
-            print(f"      ✗ Failed to process {symbol}")
+            print(f"      [ERROR] Failed to process {symbol}")
         
         # Progress indicator
         if (i + 1) % 10 == 0:
@@ -405,12 +405,12 @@ def create_comprehensive_database():
     print(f"\n{'='*80}")
     print("DATABASE CREATION COMPLETE!")
     print(f"{'='*80}")
-    print(f"  ✓ Total symbols extracted: {len(symbols)}")
-    print(f"  ✓ Successfully processed: {successful_symbols}")
-    print(f"  ✓ Failed to process: {failed_symbols}")
-    print(f"  ✓ Total records extracted: {total_records:,}")
-    print(f"  ✓ Success rate: {database['metadata']['processing_summary']['success_rate']:.2f}%")
-    print(f"  ✓ Database saved to: {filename}")
+    print(f"  [OK] Total symbols extracted: {len(symbols)}")
+    print(f"  [OK] Successfully processed: {successful_symbols}")
+    print(f"  [OK] Failed to process: {failed_symbols}")
+    print(f"  [OK] Total records extracted: {total_records:,}")
+    print(f"  [OK] Success rate: {database['metadata']['processing_summary']['success_rate']:.2f}%")
+    print(f"  [OK] Database saved to: {filename}")
     
     # Display sample data structure
     if successful_symbols > 0:
