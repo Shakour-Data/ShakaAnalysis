@@ -50,11 +50,32 @@ document.addEventListener('DOMContentLoaded', () => {
     let rsiChart = null;
     let macdChart = null;
     let processing = false;
-    let visibleIndicators = {
+    const visibleIndicators = {
         rsi: false,
         macd: false,
         bbands: false
     };
+    
+    // ======================
+    // SACRED COLOR PALETTE (Harmonic Design Tokens)
+    // ======================
+    const COLORS = {
+        gevurah: '#C62828',
+        chesed: '#1565C0',
+        yesod: '#F5F5F5',
+        tiferet: '#FFD54F',
+        success: '#10b981',
+        danger: '#EF5350'
+    };
+    
+    const rgb = (hex) => {
+        const r = parseInt(hex.slice(1, 3), 16);
+        const g = parseInt(hex.slice(3, 5), 16);
+        const b = parseInt(hex.slice(5, 7), 16);
+        return `rgb(${r}, ${g}, ${b})`;
+    };
+    
+    const rgba = (hex, alpha) => `rgba(${rgb(hex).match(/\d+/g).map(n => n).join(', ')}, ${alpha})`;
     
     // ======================
     // UTILITY FUNCTIONS
@@ -86,11 +107,11 @@ document.addEventListener('DOMContentLoaded', () => {
     
     const showLoading = (show) => {
         if (show) {
-            loadingOverlay.style.display = 'flex';
+            loadingOverlay.classList.add('show');
             fetchBtn.disabled = true;
             loadDataBtn.disabled = true;
         } else {
-            loadingOverlay.style.display = 'none';
+            loadingOverlay.classList.remove('show');
             fetchBtn.disabled = false;
             loadDataBtn.disabled = false;
         }
