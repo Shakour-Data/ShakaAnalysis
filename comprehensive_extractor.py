@@ -1,457 +1,448 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """
-Comprehensive symbol data extractor from finpy_tse
-Extracts all symbols, price data, and indicators from beginning of data available
+Robust comprehensive symbol data extractor from finpy_tse.
+Features:
+  - Global SSL bypass (urllib3.PoolManager + requests)
+  - Retry with exponential backoff on all network calls
+  - Direct SQLite storage (symbols + price_data + indices_data)
+  - Technical indicator computation (SMA, RSI, MACD, Bollinger, ADX, CCI, MFI)
 """
 
+import sqlite3
 import ssl
 import urllib3
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 import json
-import pandas as pd
+import sys
+import os
+import time
 import numpy as np
+import pandas as pd
 from datetime import datetime
-from collections import defaultdict
 
-# ==================== SSL PATCH START ====================
-# Apply monkey patch BEFORE importing finpy_tse
-_original_get = requests.get
-_original_post = requests.post
+# =============================================================================
+# 1. GLOBAL SSL BYPASS (applied BEFORE importing finpy_tse)
+# =============================================================================
+print("[1/6] Applying global SSL bypass...")
 
-def patched_get(url, *args, **kwargs):
+_unverified_ctx = ssl.create_default_context()
+_unverified_ctx.check_hostname = False
+_unverified_ctx.verify_mode = ssl.CERT_NONE
+
+_orig_pool_init = urllib3.PoolManager.__init__
+def _patched_pool_init(self, *args, **kwargs):
+    kwargs['ssl_context'] = _unverified_ctx
+    _orig_pool_init(self, *args, **kwargs)
+urllib3.PoolManager.__init__ = _patched_pool_init
+
+_orig_https_conn_init = urllib3.connection.HTTPSConnection.__init__
+def _patched_https_conn_init(self, *args, **kwargs):
+    kwargs['assert_hostname'] = False
+    kwargs['cert_reqs'] = ssl.CERT_NONE
+    _orig_https_conn_init(self, *args, **kwargs)
+urllib3.connection.HTTPSConnection.__init__ = _patched_https_conn_init
+
+_orig_requests_get = requests.get
+_orig_requests_post = requests.post
+_orig_session_get = requests.Session.get
+_orig_session_post = requests.Session.post
+
+def _patched_get(url, *args, **kwargs):
     kwargs['verify'] = False
-    kwargs.setdefault('timeout', 60)
-    return _original_get(url, *args, **kwargs)
+    kwargs.setdefault('timeout', 120)
+    return _orig_requests_get(url, *args, **kwargs)
 
-def patched_post(url, *args, **kwargs):
+def _patched_post(url, *args, **kwargs):
     kwargs['verify'] = False
-    kwargs.setdefault('timeout', 60)
-    return _original_post(url, *args, **kwargs)
+    kwargs.setdefault('timeout', 120)
+    return _orig_requests_post(url, *args, **kwargs)
 
-# Apply global patches
-requests.get = patched_get
-requests.post = patched_post
-
-# Patch session methods
-_original_session_get = requests.Session.get
-_original_session_post = requests.Session.post
-
-def patched_session_get(self, url, *args, **kwargs):
+def _patched_session_get(self, url, *args, **kwargs):
     kwargs['verify'] = False
-    kwargs.setdefault('timeout', 60)
-    return _original_session_get(self, url, *args, **kwargs)
+    kwargs.setdefault('timeout', 120)
+    return _orig_session_get(self, url, *args, **kwargs)
 
-def patched_session_post(self, url, *args, **kwargs):
+def _patched_session_post(self, url, *args, **kwargs):
     kwargs['verify'] = False
-    kwargs.setdefault('timeout', 60)
-    return _original_session_post(self, url, *args, **kwargs)
+    kwargs.setdefault('timeout', 120)
+    return _orig_session_post(self, url, *args, **kwargs)
 
-requests.Session.get = patched_session_get
-requests.Session.post = patched_session_post
+requests.get = _patched_get
+requests.post = _patched_post
+requests.Session.get = _patched_session_get
+requests.Session.post = _patched_session_post
 
-# Disable SSL warnings
+_retry_adapter = HTTPAdapter(
+    max_retries=Retry(
+        total=3,
+        backoff_factor=2,
+        status_forcelist=[429, 500, 502, 503, 504],
+        allowed_methods=["GET", "POST"],
+        raise_on_status=False
+    )
+)
+_session = requests.Session()
+_session.mount("http://", _retry_adapter)
+_session.mount("https://", _retry_adapter)
+
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-print("[OK] SSL patch applied successfully")
+print("  [OK] SSL bypass and retry adapter applied")
 
-# Now import finpy_tse
+# =============================================================================
+# 2. IMPORT finpy_tse (now with SSL bypass active)
+# =============================================================================
+print("[2/6] Importing finpy_tse...")
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import finpy_tse
-print("[OK] finpy_tse imported successfully")
+print("  [OK] finpy_tse imported successfully")
 
-# ==================== SSL PATCH END ====================
+# =============================================================================
+# 3. DATABASE CONNECTION
+# =============================================================================
+print("[3/6] Connecting to database...")
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), 'src'))
+from database import initialize_database, get_db_connection
 
-def extract_all_symbols():
-    """Extract all symbols from TSE, OTC, and other markets"""
-    print("\n" + "="*80)
-    print("EXTRACTING ALL SYMBOLS FROM FINPY_TSE")
-    print("="*80)
-    
-    try:
-        # Build comprehensive market stock list
-        df = finpy_tse.Build_Market_StockList(
-            bourse=True,
-            farabourse=True,
-            payeh=True,
-            detailed_list=True,
-            show_progress=False,
-            save_excel=False,
-            save_csv=False
-        )
-        
-        if df.empty:
-            print("  No symbols found in market list")
-            return []
-            
-        print(f"  [OK] Found {len(df)} symbols in market list")
-        
-        # Process symbols
-        symbols = []
-        seen_symbols = set()
-        
-        for _, row in df.iterrows():
-            # Extract symbol information
-            ticker = str(row.get('Ticker', '')).strip()
-            name = str(row.get('Name', '')).strip()
-            webid = str(row.get('WEB-ID', '')).strip()
-            market = str(row.get('Market', '')).strip()
-            
-            if not ticker:
-                continue
-                
-            # Clean and normalize
-            ticker_clean = ''.join(ticker.split()).strip()
-            if ticker_clean in seen_symbols:
-                continue
-            seen_symbols.add(ticker_clean)
-            
-            # Determine symbol type based on market and ticker
-            symbol_type = 'Unknown'
-            if market == 'بورس':
-                symbol_type = 'Stock'
-            elif market == 'فرابورس':
-                symbol_type = 'Stock'
-            elif 'صاخص' in name.lower() or 'index' in name.lower():
-                symbol_type = 'Index'
-            elif 'شاخص' in ticker:
-                symbol_type = 'Index'
-                
-            # Create symbol object
-            symbol_obj = {
-                'symbol': ticker_clean,
-                'name': name,
-                'type': symbol_type,
-                'market': market,
-                'webid': webid,
-                'exchange': 'TSE' if market == 'بورس' else 'OTC',
-                'industry': 'Unknown',
-                'country': 'IR',
-                'currency': 'IRR',
-                'description': name,
-                'sector': market,
-                'metadata': {}
-            }
-            symbols.append(symbol_obj)
-        
-        # Add common indices not in market list
-        common_indices = [
-            {'symbol': '۳۰۲۰۱', 'name': 'TEPIX Index', 'type': 'Index', 'market': 'بورس'},
-            {'symbol': '۱۰۰۰۱', 'name': 'TSE Index', 'type': 'Index', 'market': 'بورس'},
-            {'symbol': '۲۰۱۰۱', 'name': 'TEDPIX Index', 'type': 'Index', 'market': 'بورس'},
-            {'symbol': '۵۰۱۰۱', 'name': 'TAFQ Index', 'type': 'Index', 'market': 'بورس'},
-            {'symbol': '۲۰۱۰۲', 'name': 'TEDIX Index', 'type': 'Index', 'market': 'بورس'},
-        ]
-        
-        for idx in common_indices:
-            symbol_clean = ''.join(idx['symbol'].split()).strip()
-            if symbol_clean not in seen_symbols:
-                idx_obj = {
-                    'symbol': symbol_clean,
-                    'name': idx['name'],
-                    'type': idx['type'],
-                    'market': idx['market'],
-                    'webid': '',
-                    'exchange': 'TSE',
-                    'industry': 'Index',
-                    'country': 'IR',
-                    'currency': 'IRR',
-                    'description': f"TSE {idx['name']} index",
-                    'sector': 'Market Index',
-                    'metadata': {}
-                }
-                symbols.append(idx_obj)
-                seen_symbols.add(symbol_clean)
-        
-        print(f"  [OK] Total symbols extracted: {len(symbols)}")
-        print(f"    - Stock symbols: {len([s for s in symbols if s['type'] == 'Stock'])}")
-        print(f"    - Index symbols: {len([s for s in symbols if s['type'] == 'Index'])}")
-        
-        return symbols
-        
-    except Exception as e:
-        print(f"  [ERROR] Error extracting symbols: {str(e)}")
-        return []
+DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data', 'market_data.db')
+os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
+initialize_database(DB_PATH)
+conn = get_db_connection(DB_PATH)
+cursor = conn.cursor()
+print("  [OK] Database connected")
 
-def extract_symbol_data(symbol, symbol_name):
-    """Extract comprehensive data for a single symbol"""
-    try:
-        print(f"    Processing {symbol}...")
-        
-        # Get price history
-        price_df = finpy_tse.Get_Price_History(
-            stock=symbol_name,
-            start_date='1395-01-01',
-            end_date='1403-12-29',
-            ignore_date=True,
-            adjust_price=True,
-            show_weekday=False,
-            double_date=False
-        )
-        
-        # Get RI history (fundamental data)
-        ri_df = finpy_tse.Get_RI_History(
-            stock=symbol_name,
-            start_date='1395-01-01',
-            end_date='1403-12-29',
-            ignore_date=True,
-            show_weekday=False,
-            double_date=False,
-            alt=False
-        )
-        
-        # Get market indices data
-        indices_data = {}
-        
+# =============================================================================
+# 4. RETRY WRAPPER
+# =============================================================================
+def retry_call(func, *args, max_retries=3, base_delay=3, **kwargs):
+    """Call func with exponential backoff retry."""
+    last_exc = None
+    for attempt in range(1, max_retries + 1):
         try:
-            indices_data['cwi'] = finpy_tse.Get_CWI_History(
-                start_date='1395-01-01',
-                end_date='1403-12-29',
-                ignore_date=True,
-                just_adj_close=False,
-                show_weekday=False,
-                double_date=False
-            )
-        except:
-            indices_data['cwi'] = pd.DataFrame()
-            
-        try:
-            indices_data['ewi'] = finpy_tse.Get_EWI_History(
-                start_date='1395-01-01',
-                end_date='1403-12-29',
-                ignore_date=True,
-                just_adj_close=True,
-                show_weekday=False,
-                double_date=False
-            )
-        except:
-            indices_data['ewi'] = pd.DataFrame()
-            
-        try:
-            indices_data['indi'] = finpy_tse.Get_INDI_History(
-                start_date='1395-01-01',
-                end_date='1403-12-29',
-                ignore_date=True,
-                just_adj_close=False,
-                show_weekday=False,
-                double_date=False
-            )
-        except:
-            indices_data['indi'] = pd.DataFrame()
-        
-        # Process and combine data
-        processed_data = {
-            'symbol': symbol,
-            'price_data': [],
-            'ri_data': [],
-            'technical_indicators': [],
-            'indices_data': indices_data,
-            'metadata': {
-                'total_price_records': 0,
-                'total_ri_records': 0,
-                'start_date': '1395-01-01',
-                'end_date': '1403-12-29',
-                'last_updated': datetime.now().strftime('%Y-%m-%d'),
-                'data_quality': 'Full',
-                'missing_data_percentage': 0.0
-            }
-        }
-        
-        # Convert price data to records
-        if not price_df.empty:
-            processed_data['price_data'] = price_df.replace({np.nan: None}).to_dict('records')
-            processed_data['metadata']['total_price_records'] = len(price_df)
-        
-        # Convert RI data to records
-        if not ri_df.empty:
-            processed_data['ri_data'] = ri_df.replace({np.nan: None}).to_dict('records')
-            processed_data['metadata']['total_ri_records'] = len(ri_df)
-        
-        # Calculate indicators if we have price data
-        if not price_df.empty and len(price_df) > 50:
-            try:
-                # Calculate moving averages
-                price_df['SMA_20'] = price_df['Close'].rolling(window=20).mean()
-                price_df['SMA_50'] = price_df['Close'].rolling(window=50).mean()
-                
-                # Calculate RSI
-                delta = price_df['Close'].diff()
-                gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
-                loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
-                rs = gain / loss
-                rsi = 100 - (100 / (1 + rs))
-                price_df['RSI'] = rsi
-                
-                # Convert to records
-                processed_data['technical_indicators'] = price_df.replace({np.nan: None}).to_dict('records')
-                
-                # Update quality metrics
-                total_cells = len(price_df) * len(price_df.columns)
-                non_null_cells = price_df.notna().sum().sum()
-                processed_data['metadata']['missing_data_percentage'] = round(
-                    (total_cells - non_null_cells) / total_cells * 100, 2)
-                    
-            except Exception as e:
-                print(f"      Warning: Indicator calculation failed: {str(e)}")
-        
-        return processed_data
-        
-    except Exception as e:
-        print(f"      [ERROR] Error: {str(e)[:200]}")
-        return None
+            return func(*args, **kwargs)
+        except Exception as e:
+            last_exc = e
+            if attempt < max_retries:
+                delay = base_delay * (2 ** (attempt - 1))
+                print(f"    Retry {attempt}/{max_retries} after {delay}s: {str(e)[:100]}")
+                time.sleep(delay)
+    raise last_exc
 
-def create_comprehensive_database():
-    """Create comprehensive database with all symbols and their data"""
-    print("\n" + "="*80)
-    print("CREATING COMPREHENSIVE DATABASE")
-    print("="*80)
-    
-    # Extract all symbols
-    symbols = extract_all_symbols()
-    
-    if not symbols:
-        print("  [ERROR] Failed to extract symbols")
-        return None
-    
-    # Create comprehensive database structure
-    database = {
-        'metadata': {
-            'creation_date': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-            'version': '2.0.0',
-            'total_symbols': len(symbols),
-            'data_period': {
-                'start_date': '1395-01-01',
-                'end_date': '1403-12-29'
-            },
-            'data_sources': ['TSE Market', 'OTC Market', 'Indices', 'FinPy TSE'],
-            'processing_summary': {
-                'symbols_processed': 0,
-                'symbols_success': 0,
-                'symbols_failed': 0,
-                'total_records': 0,
-                'data_quality': 'High'
-            }
-        },
-        'symbols': {},
-        'indices': {},
-        'market_overview': {}
-    }
-    
-    # Process each symbol
-    successful_symbols = 0
-    failed_symbols = 0
-    total_records = 0
-    
-    for i, symbol_info in enumerate(symbols):
-        symbol = symbol_info['symbol']
-        symbol_name = symbol_info['name']
-        
-        print(f"\n  Processing symbol {i+1}/{len(symbols)}: {symbol} ({symbol_name})")
-        
-        # Extract data for this symbol
-        symbol_data = extract_symbol_data(symbol, symbol_name)
-        
-        if symbol_data:
-            successful_symbols += 1
-            database['symbols'][symbol] = symbol_data
-            
-            # Update summary
-            if 'price_data' in symbol_data:
-                total_records += len(symbol_data['price_data'])
-                
-            # Categorize by type
-            if symbol_info['type'] == 'Index':
-                database['indices'][symbol] = symbol_data
-            else:
-                # Add to market overview by industry
-                industry = symbol_info.get('industry', 'Unknown')
-                if industry not in database['market_overview']:
-                    database['market_overview'][industry] = {
-                        'symbols': [],
-                        'total_records': 0,
-                        'avg_data_quality': 0
-                    }
-                database['market_overview'][industry]['symbols'].append(symbol)
-                
-        else:
-            failed_symbols += 1
-            print(f"      [ERROR] Failed to process {symbol}")
-        
-        # Progress indicator
-        if (i + 1) % 10 == 0:
-            print(f"      Progress: {i+1}/{len(symbols)} symbols processed")
-    
-    # Update processing summary
-    database['metadata']['processing_summary'].update({
-        'symbols_processed': len(symbols),
-        'symbols_success': successful_symbols,
-        'symbols_failed': failed_symbols,
-        'total_records': total_records,
-        'success_rate': round((successful_symbols / len(symbols)) * 100, 2)
-    })
-    
-    # Add market indices overview
-    database['metadata']['market_overview'] = {
-        'tse_stocks': len([s for s in symbols if s['type'] == 'Stock' and s['market'] == 'بورس']),
-        'otc_stocks': len([s for s in symbols if s['type'] == 'Stock' and s['market'] == 'فرابورس']),
-        'indices': len(database['indices']),
-        'total_assets': len(symbols)
-    }
-    
-    # Save database
-    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    filename = f"comprehensive_symbols_database_{timestamp}.json"
-    
-    with open(filename, 'w', encoding='utf-8') as f:
-        json.dump(database, f, ensure_ascii=False, indent=2)
-    
-    print(f"\n{'='*80}")
-    print("DATABASE CREATION COMPLETE!")
-    print(f"{'='*80}")
-    print(f"  [OK] Total symbols extracted: {len(symbols)}")
-    print(f"  [OK] Successfully processed: {successful_symbols}")
-    print(f"  [OK] Failed to process: {failed_symbols}")
-    print(f"  [OK] Total records extracted: {total_records:,}")
-    print(f"  [OK] Success rate: {database['metadata']['processing_summary']['success_rate']:.2f}%")
-    print(f"  [OK] Database saved to: {filename}")
-    
-    # Display sample data structure
-    if successful_symbols > 0:
-        sample_symbol = list(database['symbols'].keys())[0]
-        print(f"\n  SAMPLE DATA STRUCTURE (Symbol: {sample_symbol}):")
-        print(f"    - Price records: {len(database['symbols'][sample_symbol]['price_data'])}")
-        print(f"    - RI records: {len(database['symbols'][sample_symbol]['ri_data'])}")
-        print(f"    - Indicator records: {len(database['symbols'][sample_symbol]['technical_indicators'])}")
-        
-        if database['symbols'][sample_symbol]['price_data']:
-            sample_record = database['symbols'][sample_symbol]['price_data'][0]
-            print(f"    - Sample fields: {list(sample_record.keys())}")
-    
-    return database
+# =============================================================================
+# 5. EXTRACT ALL SYMBOLS
+# =============================================================================
+print("[4/6] Extracting symbols from TSE...")
 
-if __name__ == '__main__':
-    print("="*80)
-    print("COMPREHENSIVE SYMBOL DATA EXTRACTION SYSTEM")
-    print("Version 2.0.0 - Enhanced with SSL bypass and error handling")
-    print("="*80)
-    
-    # Create comprehensive database
-    database = create_comprehensive_database()
-    
-    if database:
-        print(f"\n{'='*80}")
-        print("SYSTEM STATUS: OPERATIONAL")
-        print(f"{'='*80}")
-        print("\nThe system has successfully extracted comprehensive market data including:")
-        print("  • All TSE and OTC stock symbols")
-        print("  • All market indices (CWI, EWI, INDI, etc.)")
-        print("  • 10-year historical price data (1395-1403)")
-        print("  • Fundamental and technical indicators")
-        print("  • Market metadata and quality metrics")
-        print("\nNext steps:")
-        print("  1. Export specific data subsets by exchange/market")
-        print("  2. Create visualization dashboards")
-        print("  3. Set up automated refresh systems")
-        print("  4. Implement validation checks")
+def fetch_symbols():
+    df = retry_call(
+        finpy_tse.Build_Market_StockList,
+        bourse=True,
+        farabourse=True,
+        payeh=True,
+        detailed_list=True,
+        show_progress=False,
+        save_excel=False,
+        save_csv=False
+    )
+    return df
+
+df_symbols = fetch_symbols()
+if df_symbols.empty:
+    print("  [ERROR] No symbols found!")
+    sys.exit(1)
+
+print(f"  [OK] Found {len(df_symbols)} symbols in market list")
+
+# Process symbols into list of tuples for DB insertion
+symbols_to_insert = []
+seen = set()
+
+for _, row in df_symbols.iterrows():
+    ticker = str(row.get('Ticker', '')).strip()
+    name = str(row.get('Name', '')).strip()
+    webid = str(row.get('WEB-ID', '')).strip()
+    market = str(row.get('Market', '')).strip()
+
+    if not ticker:
+        continue
+
+    ticker_clean = ''.join(ticker.split()).strip()
+    if ticker_clean in seen:
+        continue
+    seen.add(ticker_clean)
+
+    if market == 'بورس':
+        exchange = 'TSE'
+        sym_type = 'Stock'
+    elif market == 'فرابورس':
+        exchange = 'OTC'
+        sym_type = 'Stock'
+    elif 'صاخص' in name.lower() or 'index' in name.lower() or 'شاخص' in ticker:
+        exchange = 'TSE'
+        sym_type = 'Index'
     else:
-        print(f"\n{'='*80}")
-        print("SYSTEM STATUS: ERROR")
-        print(f"{'='*80}")
-        print("Failed to create comprehensive database. Please check error logs.")
+        exchange = 'TSE'
+        sym_type = 'Unknown'
+
+    symbols_to_insert.append((
+        ticker_clean, name, sym_type, exchange,
+        'Unknown', market, webid, 'IR', 'IRR', 1
+    ))
+
+# Clear old data and insert fresh
+cursor.execute('DELETE FROM price_data')
+cursor.execute('DELETE FROM symbols')
+cursor.execute('DELETE FROM indices_data')
+cursor.execute('DELETE FROM sqlite_sequence WHERE name="symbols"')
+cursor.execute('DELETE FROM sqlite_sequence WHERE name="price_data"')
+cursor.execute('DELETE FROM sqlite_sequence WHERE name="indices_data"')
+
+cursor.executemany('''
+    INSERT INTO symbols (symbol, name, type, exchange, industry, sector, webid, country, currency, is_active)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+''', symbols_to_insert)
+conn.commit()
+print(f"  [OK] Inserted {len(symbols_to_insert)} symbols into database")
+
+# Add common indices
+common_indices = [
+    ('30201', 'TEPIX Index', 'Index', 'TSE'),
+    ('10001', 'TSE Index', 'Index', 'TSE'),
+    ('20101', 'TEDPIX Index', 'Index', 'TSE'),
+    ('50101', 'TAFQ Index', 'Index', 'TSE'),
+    ('20102', 'TEDIX Index', 'Index', 'TSE'),
+]
+for sym, name, stype, exchange in common_indices:
+    if sym not in seen:
+        cursor.execute('''
+            INSERT OR IGNORE INTO symbols (symbol, name, type, exchange, industry, sector, webid, country, currency, is_active)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (sym, name, stype, exchange, 'Index', 'Market Index', '', 'IR', 'IRR', 1))
+        seen.add(sym)
+conn.commit()
+
+# Get all stock symbols for price data extraction
+cursor.execute("SELECT symbol, name, webid FROM symbols WHERE type = 'Stock'")
+stock_symbols = cursor.fetchall()
+print(f"  [OK] {len(stock_symbols)} stock symbols ready for price extraction")
+
+# =============================================================================
+# 6. EXTRACT PRICE DATA FOR EACH SYMBOL
+# =============================================================================
+print("[5/6] Extracting price data for each symbol...")
+
+def fetch_price_history(symbol_name):
+    return retry_call(
+        finpy_tse.Get_Price_History,
+        stock=symbol_name,
+        start_date='1395-01-01',
+        end_date='1403-12-29',
+        ignore_date=True,
+        adjust_price=True,
+        show_weekday=False,
+        double_date=False
+    )
+
+success_count = 0
+fail_count = 0
+total_price_rows = 0
+batch_count = 0
+
+for idx, (symbol, name, webid) in enumerate(stock_symbols):
+    if idx % 20 == 0 and idx > 0:
+        conn.commit()
+        print(f"    Progress: {idx}/{len(stock_symbols)} symbols, {success_count} OK, {total_price_rows} rows")
+
+    try:
+        price_df = fetch_price_history(name)
+    except Exception as e:
+        print(f"    [WARN] Price fetch failed for {symbol} ({name}): {str(e)[:80]}")
+        price_df = pd.DataFrame()
+
+    if price_df.empty:
+        fail_count += 1
+        continue
+
+    # Compute technical indicators
+    if len(price_df) > 50:
+        try:
+            price_df['SMA_20'] = price_df['Close'].rolling(window=20).mean()
+            price_df['SMA_50'] = price_df['Close'].rolling(window=50).mean()
+
+            delta = price_df['Close'].diff()
+            gain = delta.where(delta > 0, 0).rolling(window=14).mean()
+            loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+            rs = gain / loss.replace(0, np.nan)
+            price_df['RSI'] = 100 - (100 / (1 + rs))
+
+            ema12 = price_df['Close'].ewm(span=12, adjust=False).mean()
+            ema26 = price_df['Close'].ewm(span=26, adjust=False).mean()
+            price_df['MACD'] = ema12 - ema26
+            price_df['MACD_Signal'] = price_df['MACD'].ewm(span=9, adjust=False).mean()
+            price_df['MACD_Histogram'] = price_df['MACD'] - price_df['MACD_Signal']
+
+            sma20 = price_df['Close'].rolling(window=20).mean()
+            std20 = price_df['Close'].rolling(window=20).std()
+            price_df['BB_Upper'] = sma20 + 2 * std20
+            price_df['BB_Lower'] = sma20 - 2 * std20
+
+            tr = pd.concat([
+                price_df['High'] - price_df['Low'],
+                (price_df['High'] - price_df['Close'].shift(1)).abs(),
+                (price_df['Low'] - price_df['Close'].shift(1)).abs()
+            ], axis=1).max(axis=1)
+            plus_dm = price_df['High'].diff()
+            minus_dm = price_df['Low'].diff()
+            plus_dm = plus_dm.where((plus_dm > minus_dm) & (plus_dm > 0), 0)
+            minus_dm = minus_dm.where((minus_dm > plus_dm) & (minus_dm > 0), 0)
+            di_plus = 100 * (plus_dm.ewm(span=14).mean() / tr.ewm(span=14).mean())
+            di_minus = 100 * (minus_dm.ewm(span=14).mean() / tr.ewm(span=14).mean())
+            dx = 100 * (di_plus - di_minus).abs() / (di_plus + di_minus)
+            price_df['ADX'] = dx.ewm(span=14).mean()
+
+            tp = (price_df['High'] + price_df['Low'] + price_df['Close']) / 3
+            sma_tp = tp.rolling(window=20).mean()
+            mad = tp.rolling(window=20).apply(lambda x: np.abs(x - x.mean()).mean(), raw=True)
+            price_df['CCI'] = (tp - sma_tp) / (0.015 * mad)
+
+            money_flow = tp * price_df['Volume']
+            positive_flow = money_flow.where(tp > tp.shift(1), 0).rolling(window=14).sum()
+            negative_flow = money_flow.where(tp < tp.shift(1), 0).rolling(window=14).sum()
+            mfi_ratio = positive_flow / negative_flow.replace(0, np.nan)
+            price_df['MFI'] = 100 - (100 / (1 + mfi_ratio))
+
+        except Exception as e:
+            print(f"    [WARN] Indicator calc failed for {symbol}: {str(e)[:60]}")
+
+    # Rename columns to match DB schema
+    rename_map = {
+        'Open': 'open', 'High': 'high', 'Low': 'low', 'Close': 'close',
+        'Final': 'final_price', 'Volume': 'volume', 'Value': 'value',
+        'Adj Open': 'adj_close', 'Adj High': 'adj_high', 'Adj Low': 'adj_low',
+        'Adj Close': 'adj_close', 'Adj Final': 'adj_final'
+    }
+    rename = {old: new for old, new in rename_map.items() if old in price_df.columns}
+    price_df = price_df.rename(columns=rename)
+
+    if 'close' not in price_df.columns or 'final_price' not in price_df.columns:
+        fail_count += 1
+        continue
+
+    # Get symbol_id from DB
+    cursor.execute("SELECT id FROM symbols WHERE symbol = ?", (symbol,))
+    sym_row = cursor.fetchone()
+    if sym_row is None:
+        fail_count += 1
+        continue
+    symbol_id = sym_row['id']
+
+    # Insert price data rows
+    rows_inserted = 0
+    for _, rec in price_df.iterrows():
+        try:
+            cursor.execute('''
+                INSERT INTO price_data (
+                    symbol_id, date, weekday, open, high, low, close,
+                    final_price, volume, value, adj_close, adj_final,
+                    sma_20, sma_50, rsi, macd, macd_signal, macd_histogram,
+                    bb_upper, bb_lower, adx, cci, mfi, ma_100, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (
+                symbol_id,
+                rec.get('date'),
+                rec.get('Weekday'),
+                rec.get('open'), rec.get('high'), rec.get('low'), rec.get('close'),
+                rec.get('final_price'), rec.get('volume'), rec.get('value'),
+                rec.get('adj_close'), rec.get('adj_final'),
+                rec.get('SMA_20'), rec.get('SMA_50'), rec.get('RSI'),
+                rec.get('MACD'), rec.get('MACD_Signal'), rec.get('MACD_Histogram'),
+                rec.get('BB_Upper'), rec.get('BB_Lower'), rec.get('ADX'),
+                rec.get('CCI'), rec.get('MFI'), None,
+                datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            ))
+            rows_inserted += 1
+        except Exception:
+            pass
+
+    if rows_inserted > 0:
+        success_count += 1
+        total_price_rows += rows_inserted
+        batch_count += rows_inserted
+        if batch_count >= 5000:
+            conn.commit()
+            batch_count = 0
+            print(f"    [COMMIT] {success_count} symbols, {total_price_rows} rows")
+    else:
+        fail_count += 1
+
+conn.commit()
+print(f"  [OK] Price data extraction complete: {success_count} symbols, {total_price_rows} rows")
+
+# =============================================================================
+# 7. FETCH AND STORE MARKET INDICES
+# =============================================================================
+print("[6/6] Fetching market indices...")
+
+def fetch_index_history(func, name):
+    try:
+        df = retry_call(func, start_date='1395-01-01', end_date='1403-12-29', ignore_date=True, just_adj_close=False, show_weekday=False, double_date=False)
+        if not df.empty:
+            print(f"  [OK] {name}: {len(df)} records")
+            return df
+    except Exception as e:
+        print(f"  [WARN] {name} fetch failed: {str(e)[:80]}")
+    return pd.DataFrame()
+
+indices_fetched = {}
+for idx_name, fetch_func in [('TEPIX', finpy_tse.Get_CWI_History), ('TEDPIX', finpy_tse.Get_EWI_History)]:
+    df_idx = fetch_index_history(fetch_func, idx_name)
+    if not df_idx.empty:
+        indices_fetched[idx_name] = df_idx
+
+# Store indices in indices_data table
+cursor.execute('DELETE FROM indices_data')
+for idx_name, df_idx in indices_fetched.items():
+    for _, row in df_idx.iterrows():
+        try:
+            cursor.execute('''
+                INSERT INTO indices_data (symbol, name, date, open, high, low, close, volume, value, adj_close, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (
+                idx_name, idx_name,
+                row.get('Date') or row.get('J-Date'),
+                row.get('Open'), row.get('High'), row.get('Low'), row.get('Close'),
+                row.get('Volume'), row.get('Value'), row.get('Adj Close'),
+                datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            ))
+        except Exception:
+            pass
+
+conn.commit()
+print(f"  [OK] Stored {len(indices_fetched)} index datasets")
+
+# =============================================================================
+# FINALIZE
+# =============================================================================
+cursor.execute("SELECT COUNT(*) FROM symbols")
+total_syms = cursor.fetchone()[0]
+cursor.execute("SELECT COUNT(*) FROM price_data")
+total_rows = cursor.fetchone()[0]
+cursor.execute("SELECT COUNT(*) FROM indices_data")
+idx_rows = cursor.fetchone()[0]
+cursor.execute("SELECT MIN(date), MAX(date) FROM price_data")
+date_range = cursor.fetchone()
+
+conn.close()
+
+print("\n" + "=" * 80)
+print("DATABASE POPULATION COMPLETE")
+print("=" * 80)
+print(f"  Total symbols: {total_syms}")
+print(f"  Total price rows: {total_rows}")
+print(f"  Total index rows: {idx_rows}")
+print(f"  Date range: {date_range[0]} to {date_range[1]}")
+print(f"  Symbols with price data: {success_count}")
+print(f"  Symbols failed: {fail_count}")
+print("=" * 80)
