@@ -114,16 +114,20 @@ for _, row in latest.iterrows():
     signals = []
     if row['rsi'] < 30: signals.append('RSI_OVERSOLD')
     if row['rsi'] > 70: signals.append('RSI_OVERBOUGHT')
-    if row['close'] > row['sma_50'] and row['close'].shift(1) <= row['sma_50'].shift(1):
+    
+    # Get previous values for comparison
+    prev_row = sym_data.iloc[-2] if len(sym_data) > 1 else row
+    
+    if row['close'] > row['sma_50'] and prev_row['close'] <= prev_row['sma_50']:
         signals.append('SMA50_BREAKOUT')
-    if row['close'] < row['sma_50'] and row['close'].shift(1) >= row['sma_50'].shift(1):
+    if row['close'] < row['sma_50'] and prev_row['close'] >= prev_row['sma_50']:
         signals.append('SMA50_BREAKDOWN')
     
     if len(sym_data) > 20:
         vol_avg = sym_data['volume'].rolling(20).mean().iloc[-1]
         if row['volume'] > vol_avg * 2: signals.append('VOLUME_SPIKE')
     
-    if row['adx'] > 25:
+    if row['adx'] is not None and row['adx'] > 25:
         signals.append('STRONG_TREND')
     
     if signals:
