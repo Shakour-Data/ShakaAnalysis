@@ -68,8 +68,9 @@ def run_backtest(symbol, symbol_df):
     
     for i in range(1, len(price_df)):
         if price_df['ma_buy'].iloc[i] and shares == 0:
-            shares = int(capital / price_df['open'].iloc[i])
-            entry_price = price_df['open'].iloc[i]
+            if price_df['open'].iloc[i] > 0:
+                shares = int(capital / price_df['open'].iloc[i])
+                entry_price = price_df['open'].iloc[i]
         elif price_df['ma_sell'].iloc[i] and shares > 0:
             pnl = (price_df['close'].iloc[i] - entry_price) / entry_price
             portfolio.append(portfolio[-1] * (1 + pnl))
@@ -182,7 +183,7 @@ print("Risk metrics calculated for", len(risk_df), "symbols")
 
 print("\nRunning CORRELATION ANALYSIS...")
 volume_rank = df_data.groupby('symbol')['volume'].sum().sort_values(ascending=False)
-top_50 symbols = volume_rank.head(50).index
+top_50_symbols = volume_rank.head(50).index
 
 pivot = df_data[df_data['symbol'].isin(top_50_symbols)].pivot_table(
     index='date', columns='symbol', values='close'
