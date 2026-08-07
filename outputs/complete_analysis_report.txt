@@ -1,0 +1,25 @@
+
+SHAKA ANALYSIS - FULL PRODUCTION PIPELINE REPORT
+Generated: 2026-08-07 18:49:39
+
+DATABASE STATUS:
+   Total Symbols: 1289
+   Stocks (TSE/OTC): 1289
+   Total Price Records: 288,561
+   Date Range: 1395-01-07 to 1403-12-28
+
+BACKTESTING RESULTS:
+   Symbols Tested: 256
+   Avg Total Return: 1267.31%
+   Best Return: 16864.69%
+
+SCREENER:
+   Signals Found: 35 symbols
+
+RISK METRICS:
+   Symbols Analyzed: 256
+   Best Sharpe: 36.06
+   Worst Drawdown: -99.94%
+
+CORRELATION:
+   High-Corr Pairs: 339
