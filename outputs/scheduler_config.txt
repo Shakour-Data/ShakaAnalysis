@@ -1,0 +1,5 @@
+# SHAKA ANALYSIS - DAILY UPDATE SCHEDULER
+# Windows Task Scheduler:
+#   schtasks /create /tn "ShakaDailyUpdate" /tr "python E:\Shakour\MyAnalysis\Chapar\ShakaAnalysis\outputs\daily_update.py" /sc daily /st 16:00
+# Linux/Mac (cron):
+#   0 16 * * 1-5 /usr/bin/python3 /path/to/daily_update.py
