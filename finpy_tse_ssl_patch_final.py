@@ -1,109 +1,148 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """
-Comprehensive SSL Bypass Patch for finpy_tse
-Patches urllib3.PoolManager, requests, and session methods to bypass SSL verification
+This script contains a comprehensive SSL bypass that patches:
+1. urllib3 (urllib3's connection and pool manager)
+2. requests library
+3. aiohttp (which is used by finpy_tse)
+
+All patches are applied BEFORE importing finpy_tse.
 """
 
+import sys
 import ssl
 import urllib3
 import requests
-from urllib3.poolmanager import PoolManager
-from requests.adapters import HTTPAdapter
+import aiohttp
+import traceback
 
-# Store original classes/functions
-_original_poolmanager_init = PoolManager.__init__
-_original_requests_get = requests.get
-_original_requests_post = requests.post
+# =============================================================================
+# 1. CREATE UNVERIFIED SSL CONTEXT
+# =============================================================================
+ssl_context = ssl.create_default_context()
+ssl_context.check_hostname = False
+ssl_context.verify_mode = ssl.CERT_NONE
 
-# Store original session methods
-_original_session_init = requests.Session.__init__
-_original_session_get = requests.Session.get
-_original_session_post = requests.Session.post
+# =============================================================================
+# 2. PATCH urllib3 - THE FOUNDATION
+# =============================================================================
 
-# ==================== SSL Bypass Configuration ====================
-# Create SSL context that doesn't verify certificates
-ssl._create_default_https_context = ssl._create_unverified_context
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+# Patch urllib3.PoolManager.__init__ to use our SSL context
+_orig_pool_manager_init = urllib3.PoolManager.__init__
+def _patched_pool_manager_init(self, *args, **kwargs):
+    kwargs['ssl_context'] = ssl_context
+    _orig_pool_manager_init(self, *args, **kwargs)
 
-# ==================== SSL Bypass Implementation ====================
+urllib3.PoolManager.__init__ = _patched_pool_manager_init
 
-# Patch urllib3.PoolManager.__init__ to use unverified SSL context
-def patched_poolmanager_init(self, *args, **kwargs):
-    # Pass SSL context that bypasses verification to PoolManager
-    kwargs['ssl_context'] = ssl.create_default_context()
-    self.__dict__.update(kwargs)
-    PoolManager.__bases__ = (urllib3.PoolManager,)
-    return _original_poolmanager_init(self, *args, **kwargs)
+# Patch urllib3.HTTPSConnection.__init__ to bypass hostname and cert checks
+_orig_https_connection_init = urllib3.connection.HTTPSConnection.__init__
+def _patched_https_connection_init(self, *args, **kwargs):
+    kwargs['assert_hostname'] = False
+    kwargs['cert_reqs'] = ssl.CERT_NONE
+    _orig_https_connection_init(self, *args, **kwargs)
 
-# Patch requests.Session methods
-def patched_session_init(self, *args, **kwargs):
-    # Initialize with original parameters
-    _original_session_init(self, *args, **kwargs)
-    # Then configure to not verify SSL
-    self.verify = False
-    # Mount adapters with SSL disabled
-    from requests.adapters import HTTPAdapter
-    adapter = HTTPAdapter()
-    self.mount('http://', adapter)
-    self.mount('https://', adapter)
+urllib3.connection.HTTPSConnection.__init__ = _patched_https_connection_init
 
-def patched_session_get(self, url, *args, **kwargs):
+# =============================================================================
+# 3. PATCH REQUESTS LIBRARY
+# =============================================================================
+
+# Create a session with SSL verification disabled
+_session = requests.Session()
+_session.verify = False
+
+# Store original methods
+_orig_get = requests.get
+_orig_post = requests.post
+_orig_session_get = requests.Session.get
+_orig_session_post = requests.Session.post
+
+# Patch the module-level functions
+def _patched_get(url, *args, **kwargs):
     kwargs['verify'] = False
-    kwargs.setdefault('timeout', 30)
-    return _original_session_get(self, url, *args, **kwargs)
+    return _orig_get(url, *args, **kwargs)
 
-def patched_session_post(self, url, *args, **kwargs):
+def _patched_post(url, *args, **kwargs):
     kwargs['verify'] = False
-    kwargs.setdefault('timeout', 30)
-    return _original_session_post(self, url, *args, **kwargs)
+    return _orig_post(url, *args, **kwargs)
 
-# Patch requests.get and requests.post
-def patched_requests_get(url, *args, **kwargs):
+# Patch the session methods
+def _patched_session_get(self, url, *args, **kwargs):
     kwargs['verify'] = False
-    kwargs.setdefault('timeout', 30)
-    return _original_requests_get(url, *args, **kwargs)
+    return _orig_session_get(self, url, *args, **kwargs)
 
-def patched_requests_post(url, *args, **kwargs):
+def _patched_session_post(self, url, *args, **kwargs):
     kwargs['verify'] = False
-    kwargs.setdefault('timeout', 30)
-    return _original_requests_post(url, *args, **kwargs)
+    return _orig_session_post(self, url, *args, **kwargs)
 
-# ==================== Apply All Patches ====================
-# Patch urllib3.PoolManager.__init__
-PoolManager.__init__ = patched_poolmanager_init
+# Apply the patches
+requests.get = _patched_get
+requests.post = _patched_post
+requests.Session.get = _patched_session_get
+requests.Session.post = _patched_session_post
 
-# Patch session methods
-requests.Session.__init__ = patched_session_init
-requests.Session.get = patched_session_get
-requests.Session.post = patched_session_post
+# =============================================================================
+# 4. PATCH AIOHTTP (finpy_tse's underlying HTTP library)
+# =============================================================================
 
-# Patch requests.get and requests.post
-requests.get = patched_requests_get
-requests.post = patched_requests_post
+# Store the original connector class
+_orig_tcp_connector_init = aiohttp.TCPConnector.__init__
+
+def _patched_tcp_connector_init(self, *args, **kwargs):
+    # Force our SSL context
+    kwargs['ssl'] = ssl_context
+    _orig_tcp_connector_init(self, *args, **kwargs)
+
+# Apply the patch
+aiohttp.TCPConnector.__init__ = _patched_tcp_connector_init
+
+# =============================================================================
+# 5. DISABLE WARNINGS AND IMPORT FINPY_TSE
+# =============================================================================
 
 # Disable urllib3 warnings
-urllib3.disable_warnings()
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-# ==================== Test Connection ====================
+# Now import finpy_tse - it should work with our patches
+print("Patching complete. Importing finpy_tse...")
+import finpy_tse
+print("finpy_tse imported successfully.")
+
+# =============================================================================
+# 6. TESTING THE EXTRACTION
+# =============================================================================
+
+print("\nTesting symbol extraction from TSE/OTC/Payeh...")
+
 try:
-    # Import finpy_tse after applying all patches
-    import finpy_tse
-    print('✓ SSL Bypass Successfully Applied to finpy_tse (urllib3 + requests)')
-
-    # Test Build_Market_StockList
+    # Try to extract symbols
     df = finpy_tse.Build_Market_StockList(
         bourse=True,
         farabourse=True,
         payeh=True,
         detailed_list=True,
-        show_progress=True,
+        show_progress=False,
         save_excel=False,
         save_csv=False
     )
-    print(f'  Shape: {df.shape}')
-    print(' Sample Data:')
-    print(df.head(3).to_string())
-    print('✓ SUCCESS: finpy_tse now works with SSL bypass!' + '\n')
+    
+    if df is not None and not df.empty:
+        print(f"✓ Successfully extracted {len(df)} symbols!")
+        print(f"\nSample data (first 5 rows):")
+        print(df.head(5).to_string())
+        
+        # Save to CSV for verification
+        csv_path = "extracted_symbols.csv"
+        df.to_csv(csv_path, index=False)
+        print(f"\n✓ Symbols saved to {csv_path}")
+        
+    else:
+        print("✗ Failed to extract symbols - empty or None result")
+        
 except Exception as e:
-    print(f'  Error: {str(e)[:500]}')
-    print('SSL bypass failed - check patches')
+    print(f"✗ Error during extraction: {e}")
+    print("\nFull traceback:")
+    traceback.print_exc()
+
+print("\nSSL bypass test completed.")
