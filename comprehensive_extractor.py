@@ -194,10 +194,10 @@ for _, row in df_symbols.iterrows():
 # Clear old data and insert fresh
 cursor.execute('DELETE FROM price_data')
 cursor.execute('DELETE FROM symbols')
-cursor.execute('DELETE FROM indices_data')
+cursor.execute('DELETE FROM indices')
 cursor.execute('DELETE FROM sqlite_sequence WHERE name="symbols"')
 cursor.execute('DELETE FROM sqlite_sequence WHERE name="price_data"')
-cursor.execute('DELETE FROM sqlite_sequence WHERE name="indices_data"')
+cursor.execute('DELETE FROM sqlite_sequence WHERE name="indices"')
 
 cursor.executemany('''
     INSERT INTO symbols (symbol, name, type, exchange, industry, sector, webid, country, currency, is_active)
@@ -268,26 +268,37 @@ for idx, (symbol, name, webid) in enumerate(stock_symbols):
     # Compute technical indicators
     if len(price_df) > 50:
         try:
+            # Moving Averages for multiple time periods
+            price_df['SMA_9'] = price_df['Close'].rolling(window=9).mean()
+            price_df['SMA_14'] = price_df['Close'].rolling(window=14).mean()
             price_df['SMA_20'] = price_df['Close'].rolling(window=20).mean()
+            price_df['SMA_21'] = price_df['Close'].rolling(window=21).mean()
+            price_df['SMA_35'] = price_df['Close'].rolling(window=35).mean()
             price_df['SMA_50'] = price_df['Close'].rolling(window=50).mean()
-
-            delta = price_df['Close'].diff()
-            gain = delta.where(delta > 0, 0).rolling(window=14).mean()
-            loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
-            rs = gain / loss.replace(0, np.nan)
-            price_df['RSI'] = 100 - (100 / (1 + rs))
-
+            price_df['SMA_100'] = price_df['Close'].rolling(window=100).mean()
+            
+            # RSI for multiple time periods
+            for window in [9, 14, 21, 35]:
+                delta = price_df['Close'].diff()
+                gain = delta.where(delta > 0, 0).rolling(window=window).mean()
+                loss = (-delta.where(delta < 0, 0)).rolling(window=window).mean()
+                rs = gain / loss.replace(0, np.nan)
+                price_df[f'RSI_{window}'] = 100 - (100 / (1 + rs))
+            
+            # MACD
             ema12 = price_df['Close'].ewm(span=12, adjust=False).mean()
             ema26 = price_df['Close'].ewm(span=26, adjust=False).mean()
             price_df['MACD'] = ema12 - ema26
             price_df['MACD_Signal'] = price_df['MACD'].ewm(span=9, adjust=False).mean()
             price_df['MACD_Histogram'] = price_df['MACD'] - price_df['MACD_Signal']
-
+            
+            # Bollinger Bands (using 20-period as standard)
             sma20 = price_df['Close'].rolling(window=20).mean()
             std20 = price_df['Close'].rolling(window=20).std()
             price_df['BB_Upper'] = sma20 + 2 * std20
             price_df['BB_Lower'] = sma20 - 2 * std20
-
+            
+            # ADX (Average Directional Index)
             tr = pd.concat([
                 price_df['High'] - price_df['Low'],
                 (price_df['High'] - price_df['Close'].shift(1)).abs(),
@@ -301,18 +312,20 @@ for idx, (symbol, name, webid) in enumerate(stock_symbols):
             di_minus = 100 * (minus_dm.ewm(span=14).mean() / tr.ewm(span=14).mean())
             dx = 100 * (di_plus - di_minus).abs() / (di_plus + di_minus)
             price_df['ADX'] = dx.ewm(span=14).mean()
-
+            
+            # CCI (Commodity Channel Index)
             tp = (price_df['High'] + price_df['Low'] + price_df['Close']) / 3
             sma_tp = tp.rolling(window=20).mean()
             mad = tp.rolling(window=20).apply(lambda x: np.abs(x - x.mean()).mean(), raw=True)
             price_df['CCI'] = (tp - sma_tp) / (0.015 * mad)
-
+            
+            # MFI (Money Flow Index)
             money_flow = tp * price_df['Volume']
             positive_flow = money_flow.where(tp > tp.shift(1), 0).rolling(window=14).sum()
             negative_flow = money_flow.where(tp < tp.shift(1), 0).rolling(window=14).sum()
             mfi_ratio = positive_flow / negative_flow.replace(0, np.nan)
             price_df['MFI'] = 100 - (100 / (1 + mfi_ratio))
-
+            
         except Exception as e:
             print(f"    [WARN] Indicator calc failed for {symbol}: {str(e)[:60]}")
 
@@ -338,7 +351,7 @@ for idx, (symbol, name, webid) in enumerate(stock_symbols):
         continue
     symbol_id = sym_row['id']
 
-    # Insert price data rows
+# Insert price data rows
     rows_inserted = 0
     for _, rec in price_df.iterrows():
         try:
@@ -346,9 +359,11 @@ for idx, (symbol, name, webid) in enumerate(stock_symbols):
                 INSERT INTO price_data (
                     symbol_id, date, weekday, open, high, low, close,
                     final_price, volume, value, adj_close, adj_final,
-                    sma_20, sma_50, rsi, macd, macd_signal, macd_histogram,
+                    sma_9, sma_14, sma_20, sma_21, sma_35, sma_50, sma_100,
+                    rsi, rsi_9, rsi_14, rsi_21, rsi_35,
+                    macd, macd_signal, macd_histogram,
                     bb_upper, bb_lower, adx, cci, mfi, ma_100, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
                 symbol_id,
                 rec.get('date'),
@@ -356,10 +371,11 @@ for idx, (symbol, name, webid) in enumerate(stock_symbols):
                 rec.get('open'), rec.get('high'), rec.get('low'), rec.get('close'),
                 rec.get('final_price'), rec.get('volume'), rec.get('value'),
                 rec.get('adj_close'), rec.get('adj_final'),
-                rec.get('SMA_20'), rec.get('SMA_50'), rec.get('RSI'),
+                rec.get('SMA_9'), rec.get('SMA_14'), rec.get('SMA_20'), rec.get('SMA_21'), 
+                rec.get('SMA_35'), rec.get('SMA_50'), rec.get('SMA_100'),
+                rec.get('RSI_14'), rec.get('RSI_9'), rec.get('RSI_14'), rec.get('RSI_21'), rec.get('RSI_35'),
                 rec.get('MACD'), rec.get('MACD_Signal'), rec.get('MACD_Histogram'),
-                rec.get('BB_Upper'), rec.get('BB_Lower'), rec.get('ADX'),
-                rec.get('CCI'), rec.get('MFI'), None,
+                rec.get('BB_Upper'), rec.get('BB_Lower'), rec.get('ADX'), rec.get('CCI'), rec.get('MFI'), None,
                 datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             ))
             rows_inserted += 1
@@ -401,13 +417,13 @@ for idx_name, fetch_func in [('TEPIX', finpy_tse.Get_CWI_History), ('TEDPIX', fi
     if not df_idx.empty:
         indices_fetched[idx_name] = df_idx
 
-# Store indices in indices_data table
-cursor.execute('DELETE FROM indices_data')
+# Store indices in indices table
+cursor.execute('DELETE FROM indices')
 for idx_name, df_idx in indices_fetched.items():
     for _, row in df_idx.iterrows():
         try:
             cursor.execute('''
-                INSERT INTO indices_data (symbol, name, date, open, high, low, close, volume, value, adj_close, created_at)
+                INSERT INTO indices (symbol, name, date, open, high, low, close, volume, value, adj_close, created_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
                 idx_name, idx_name,
@@ -437,12 +453,31 @@ date_range = cursor.fetchone()
 conn.close()
 
 print("\n" + "=" * 80)
-print("DATABASE POPULATION COMPLETE")
-print("=" * 80)
-print(f"  Total symbols: {total_syms}")
-print(f"  Total price rows: {total_rows}")
-print(f"  Total index rows: {idx_rows}")
-print(f"  Date range: {date_range[0]} to {date_range[1]}")
-print(f"  Symbols with price data: {success_count}")
-print(f"  Symbols failed: {fail_count}")
-print("=" * 80)
+    print("DATABASE POPULATION COMPLETE")
+    print("=" * 80)
+    print(f"  Total symbols: {total_syms}")
+    print(f"  Total price rows: {total_rows}")
+    print(f"  Total index rows: {idx_rows}")
+    print(f"  Date range: {date_range[0]} to {date_range[1]}")
+    print(f"  Symbols with price data: {success_count}")
+    print(f"  Symbols failed: {fail_count}")
+    print("=" * 80)
+    
+    # Send notification
+    try:
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'scheduler'))
+        from utils import notify_success
+        message = f"Extraction complete: {total_syms} symbols, {total_rows} price rows"
+        notify_success(message)
+    except Exception as e:
+        print(f"Failed to send notification: {e}")
+
+except Exception as e:
+    print(f"\n[ERROR] Extraction failed: {e}")
+    try:
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'scheduler'))
+        from utils import notify_error
+        notify_error(f"Extraction failed: {e}")
+    except:
+        pass
+    sys.exit(1)
