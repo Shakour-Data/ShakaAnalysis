@@ -19,16 +19,17 @@ def initialize_database(database_path):
     cur.execute("DROP TABLE IF EXISTS analysis_records")
     cur.execute("DROP TABLE IF EXISTS export_history")
     cur.execute("DROP TABLE IF EXISTS data_metadata")
-    cur.execute("DROP TABLE IF EXISTS indices_data")
+    cur.execute("DROP TABLE IF EXISTS indices")
+    cur.execute("DROP TABLE IF EXISTS industry_indices")
     cur.execute("DROP TABLE IF EXISTS price_data")
     cur.execute("DROP TABLE IF EXISTS symbols")
 
-    # Symbols table
+# Symbols table
     cur.execute('''CREATE TABLE symbols (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         symbol TEXT UNIQUE NOT NULL,
         name TEXT,
-        type TEXT,
+        type TEXT CHECK(type IN ('Stock', 'Index', 'Currency', 'Commodity', 'OTC', 'ETF')),
         exchange TEXT,
         industry TEXT,
         sector TEXT,
@@ -54,12 +55,23 @@ def initialize_database(database_path):
         value REAL,
         adj_close REAL,
         adj_final REAL,
+        sma_9 REAL,
+        sma_14 REAL,
         sma_20 REAL,
+        sma_21 REAL,
+        sma_35 REAL,
         sma_50 REAL,
+        sma_100 REAL,
         rsi REAL,
+        rsi_9 REAL,
+        rsi_14 REAL,
+        rsi_21 REAL,
+        rsi_35 REAL,
         macd REAL,
         macd_signal REAL,
         macd_histogram REAL,
+        macd_signal_14 REAL,
+        macd_histogram_14 REAL,
         bb_upper REAL,
         bb_lower REAL,
         adx REAL,
@@ -67,14 +79,13 @@ def initialize_database(database_path):
         mfi REAL,
         ma_100 REAL,
         created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (symbol_id) REFERENCES symbols (id)
+        FOREIGN KEY (symbol_id) REFERENCES symbols (id) ON DELETE CASCADE
     )''')
 
-    # Indices data table (for market indices like TEPIX, TEDPIX)
-    cur.execute('''CREATE TABLE indices_data (
+    # Indices table (for market indices like TEPIX, TEDPIX)
+    cur.execute('''CREATE TABLE indices (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        symbol TEXT NOT NULL,
-        name TEXT,
+        symbol_id INTEGER NOT NULL,
         date TEXT,
         open REAL,
         high REAL,
@@ -83,6 +94,16 @@ def initialize_database(database_path):
         volume INTEGER,
         value REAL,
         adj_close REAL,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (symbol_id) REFERENCES symbols (id) ON DELETE CASCADE
+    )''')
+
+    # Industry indices table (explicit mapping of stocks to industry indices)
+    cur.execute('''CREATE TABLE industry_indices (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        industry TEXT NOT NULL,
+        index_name TEXT NOT NULL,
+        symbol TEXT,
         created_at TEXT DEFAULT CURRENT_TIMESTAMP
     )''')
 
@@ -91,7 +112,8 @@ def initialize_database(database_path):
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         key TEXT UNIQUE NOT NULL,
         value TEXT,
-        updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        deleted_at TEXT DEFAULT NULL
     )''')
 
     # Export history table
@@ -117,8 +139,8 @@ def initialize_database(database_path):
     # Create indexes for better performance
     cur.execute('CREATE INDEX idx_price_symbol_date ON price_data(symbol_id, date)')
     cur.execute('CREATE INDEX idx_price_date ON price_data(date)')
-    cur.execute('CREATE INDEX idx_indices_symbol ON indices_data(symbol)')
-    cur.execute('CREATE INDEX idx_indices_symbol_date ON indices_data(symbol, date)')
+    cur.execute('CREATE INDEX idx_indices_symbol ON indices(symbol_id)')
+    cur.execute('CREATE INDEX idx_indices_symbol_date ON indices(symbol_id, date)')
     cur.execute('CREATE INDEX idx_symbols_exchange ON symbols(exchange)')
     cur.execute('CREATE INDEX idx_symbols_type ON symbols(type)')
     cur.execute('CREATE INDEX idx_symbols_industry ON symbols(industry)')
