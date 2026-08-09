@@ -103,15 +103,18 @@ print("  [OK] finpy_tse imported successfully")
 # 3. DATABASE CONNECTION
 # =============================================================================
 print("[3/6] Connecting to database...")
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), 'src'))
-from database import initialize_database, get_db_connection
-
-DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data', 'market_data.db')
-os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
-initialize_database(DB_PATH)
-conn = get_db_connection(DB_PATH)
-cursor = conn.cursor()
-print("  [OK] Database connected")
+        sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), 'src'))
+        from database import initialize_database
+        
+        DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data', 'market_data.db')
+        os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
+        initialize_database(DB_PATH)
+        
+        # Database connection with concurrent access support
+        conn = sqlite3.connect(DB_PATH, check_same_thread=False, timeout=10)
+        cursor = conn.cursor()
+        # Set busy timeout to prevent lock contention
+        conn.execute("PRAGMA busy_timeout=5000;")
 
 # =============================================================================
 # 4. RETRY WRAPPER
@@ -351,8 +354,9 @@ for idx, (symbol, name, webid) in enumerate(stock_symbols):
         continue
     symbol_id = sym_row['id']
 
-# Insert price data rows
+# Insert price data rows with transaction
     rows_inserted = 0
+    cursor.execute('BEGIN')
     for _, rec in price_df.iterrows():
         try:
             cursor.execute('''
@@ -381,6 +385,7 @@ for idx, (symbol, name, webid) in enumerate(stock_symbols):
             rows_inserted += 1
         except Exception:
             pass
+    conn.commit()
 
     if rows_inserted > 0:
         success_count += 1
