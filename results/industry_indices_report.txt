@@ -1,0 +1,9 @@
+=== INDUSTRY INDICES IN SYSTEM ===
+Total Index symbols: 4
+
+شاخص صنعت                 | Industry Indices               
+شاخص برابر وزن            | Total Equal Weight Index       
+شاخص کل سهم               | Total Stock Index              
+شاخص کل                   | شاخص کل                        
+
+=== ALL UNIQUE SECTORS IN DATABASE ===
