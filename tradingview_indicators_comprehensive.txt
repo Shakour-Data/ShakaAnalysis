@@ -1,0 +1,222 @@
+=== TRADINGVIEW INDICATORS COMPREHENSIVE LIST ===
+
+Total Categories: 4
+
+=== OSCILLATORS (32 INDICATORS) ===
+Time Period 1:
+    - RSI: Relative Strength Index
+    - Stochastic: Stochastic Oscillator
+    - Williams_R: Williams %R
+Time Period 5:
+    - CMO: Choppiness Index
+Time Period 14:
+    - RSI: RSI
+    - Ultimate_Osc: Ultimate Oscillator
+    - StochRSI: StochRSI
+    - TEMA_RSI: TEMA RSI
+    - WMA_RSI: WMA RSI
+    - Hull_RSI: Hull RSI
+    - LR: Laguerre RSI
+    - DSR: Difference Slope Ratio
+    - TSI: True Strength Index
+Time Period 20:
+    - DPO: Detrended Price Oscillator
+Time Period 24:
+    - ATR: Average True Range
+Time Period 28:
+    - AMA: Arnaud Legrain Mean Value
+Time Period 30:
+    - TRIX: Triple Exponential Average
+
+=== TREND (38 INDICATORS) ===
+Time Period 1:
+    - MACD: Moving Average Convergence Divergence
+    - MACD_Hist: MACD Histogram
+    - MACD_Signal: MACD Signal Line
+Time Period 9:
+    - EMA: Exponential Moving Average
+Time Period 10:
+    - SMA: Simple Moving Average
+    - WMA: Weighted Moving Average
+    - VWMA: Volume Weighted Moving Average
+    - DMA: Dema Moving Average
+    - TEMA: Triple Exponential Moving Average
+    - VWAP: Volume Weighted Average Price
+    - HMA: Hull Moving Average
+    - MedPrice: Median Price
+    - TypicalPrice: Typical Price
+Time Period 12:
+    - Pivot: Pivot Points
+    - PivotStandard: Standard Pivot
+    - PivotFibonacci: Fibonacci Pivot
+    - PivotCamarilla: Camarilla Pivot
+    - PivotWoodies: Woodies Pivot
+    - PivotDin: Din Finito Pivot
+    - PivotDemark: Demark Pivot
+    - PivotStatistical: Statistical Pivot
+Time Period 20:
+    - PivotStandardOHLC: Pivot Standard OHLC
+    - PivotStandardHLC: Pivot Standard HLC
+    - PivotStandardHLC2: Pivot Standard HLC2
+Time Period 50:
+    - PivotStandardOHL: Pivot Standard OHL
+Time Period 100:
+    - PivotStandardHL: Pivot Standard HL
+Time Period 200:
+    - PivotStandardH: Pivot Standard H
+
+=== VOLATILITY (11 INDICATORS) ===
+Time Period 1:
+    - ATR: Average True Range
+Time Period 20:
+    - Bollinger_Upper: Bollinger Bands Upper
+    - Bollinger_Lower: Bollinger Bands Lower
+    - Bollinger_Middle: Bollinger Bands Middle
+Time Period 30:
+    - Standard_Deviation: Standard Deviation
+    - Volatility: Volatility
+Time Period 50:
+    - Keltner_Upper: Keltner Channels Upper
+    - Keltner_Lower: Keltner Channels Lower
+    - Keltner_Middle: Keltner Channels Middle
+Time Period 100:
+    - Donchian_Upper: Donchian Channels Upper
+    - Donchian_Lower: Donchian Channels Lower
+    - Donchian_Middle: Donchian Channels Middle
+Time Period 150:
+    - Stretch: Stretch
+
+=== MOMENTUM (35 INDICATORS) ===
+Time Period 1:
+    - RSI: Relative Strength Index
+Time Period 2:
+    - Stochastic: Stochastic Oscillator
+Time Period 3:
+    - Williams_R: Williams %R
+Time Period 4:
+    - CMO: Choppiness Index
+Time Period 5:
+    - Ultimate_Osc: Ultimate Oscillator
+Time Period 6:
+    - StochRSI: StochRSI
+    - TEMA_RSI: TEMA RSI
+Time Period 7:
+    - WMA_RSI: WMA RSI
+    - Hull_RSI: Hull RSI
+Time Period 8:
+    - LR: Laguerre RSI
+    - DSR: Difference Slope Ratio
+    - TSI: True Strength Index
+Time Period 9:
+    - ROC: Rate of Change
+Time Period 10:
+    - MOM: Momentum
+Time Period 11:
+    - Pulse: Pulse
+Time Period 12:
+    - Full_Range_Osc: Full Range Oscillator
+    - AbsolutePriceOscillator: Absolute Price Oscillator
+    - AbsoluteVolumeOscillator: Absolute Volume Oscillator
+Time Period 13:
+    - AO: Awesome Oscillator
+    - AC: Accelerator Oscillator
+Time Period 14:
+    - CCI: Commodity Channel Index
+Time Period 20:
+    - DPO: Detrended Price Oscillator
+    - MedPrice: Median Price
+    - TypicalPrice: Typical Price
+    - Pivot: Pivot Points
+    - PivotStandard: Standard Pivot
+    - PivotFibonacci: Fibonacci Pivot
+    - PivotCamarilla: Camarilla Pivot
+    - PivotWoodies: Woodies Pivot
+    - PivotDin: Din Finito Pivot
+    - PivotDemark: Demark Pivot
+    - PivotStatistical: Statistical Pivot
+
+=== SUPPORT/RESISTANCE (32 INDICATORS) ===
+Time Period 1:
+    - Pivot: Pivot Points
+Time Period 2:
+    - PivotStandard: Standard Pivot
+Time Period 3:
+    - PivotFibonacci: Fibonacci Pivot
+Time Period 4:
+    - PivotCamarilla: Camarilla Pivot
+Time Period 5:
+    - PivotWoodies: Woodies Pivot
+Time Period 6:
+    - PivotDin: Din Finito Pivot
+Time Period 7:
+    - PivotDemark: Demark Pivot
+Time Period 8:
+    - PivotStatistical: Statistical Pivot
+Time Period 9:
+    - PivotStandardOHLC: Pivot Standard OHLC
+Time Period 10:
+    - PivotStandardHLC: Pivot Standard HLC
+Time Period 11:
+    - PivotStandardHLC2: Pivot Standard HLC2
+Time Period 12:
+    - PivotStandardOHL: Pivot Standard OHL
+Time Period 13:
+    - PivotStandardHL: Pivot Standard HL
+Time Period 14:
+    - PivotStandardH: Pivot Standard H
+Time Period 15:
+    - PivotStandardL: Pivot Standard L
+Time Period 16:
+    - PivotStandardC: Pivot Standard C
+Time Period 17:
+    - PivotStandardO: Pivot Standard O
+Time Period 18:
+    - PivotStandardP: Pivot Standard P
+Time Period 19:
+    - PivotStandardT: Pivot Standard T
+Time Period 20:
+    - PivotStandardR: Pivot Standard R
+Time Period 21:
+    - PivotStandardS: Pivot Standard S
+Time Period 22:
+    - PivotStandard1: Pivot Standard 1
+Time Period 23:
+    - PivotStandard2: Pivot Standard 2
+Time Period 24:
+    - PivotStandard3: Pivot Standard 3
+Time Period 25:
+    - PivotStandard4: Pivot Standard 4
+Time Period 26:
+    - PivotStandard5: Pivot Standard 5
+Time Period 27:
+    - PivotStandard6: Pivot Standard 6
+Time Period 28:
+    - PivotStandard7: Pivot Standard 7
+Time Period 29:
+    - PivotStandard8: Pivot Standard 8
+Time Period 30:
+    - PivotStandard9: Pivot Standard 9
+Time Period 31:
+    - PivotStandard10: Pivot Standard 10
+Time Period 32:
+    - PivotStandard11: Pivot Standard 11
+Time Period 33:
+    - PivotStandard12: Pivot Standard 12
+Time Period 34:
+    - PivotStandard13: Pivot Standard 13
+Time Period 35:
+    - PivotStandard14: PivotStandard14
+Time Period 36:
+    - PivotStandard15: PivotStandard15
+Time Period 37:
+    - PivotStandard16: PivotStandard16
+Time Period 38:
+    - PivotStandard17: PivotStandard17
+Time Period 39:
+    - PivotStandard18: PivotStandard18
+Time Period 40:
+    - PivotStandard19: PivotStandard19
+Time Period 41:
+    - PivotStandard20: PivotStandard20
+
+Total indicators: 116 indicators
