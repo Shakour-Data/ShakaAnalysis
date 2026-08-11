@@ -1,0 +1,15 @@
+Current symbols table schema:
+  0: INTEGER 
+  1: TEXT 
+  2: TEXT 
+  3: TEXT 
+  4: TEXT 
+  5: TEXT 
+  6: TEXT 
+  7: TEXT 
+  8: TEXT 'IR'
+  9: TEXT 'IRR'
+  10: INTEGER 1
+  11: TEXT CURRENT_TIMESTAMP
+
+Type constraint: only Stock, Index, Currency, Commodity, OTC, ETF allowed
