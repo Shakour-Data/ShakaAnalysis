@@ -1,0 +1,496 @@
+openapi: 3.0.3
+info:
+  title: Shaka Analysis API
+  description: Persian stock market analysis API with technical indicators
+  version: 1.0.0
+  contact:
+    name: Shaka Analysis Team
+    email: contact@shaka-analysis.com
+
+servers:
+  - url: http://localhost:5000/api
+    description: Local development server
+  - url: https://api.shaka-analysis.com/v1
+    description: Production server
+
+tags:
+  - name: symbols
+    description: Symbol management endpoints
+  - name: data
+    description: Price data endpoints
+  - name: indices
+    description: Market indices endpoints
+  - name: analysis
+    description: Analysis and dashboard endpoints
+  - name: download
+    description: Data download endpoints
+
+components:
+  schemas:
+    Symbol:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: Database ID
+        symbol:
+          type: string
+          description: Stock symbol (e.g., "فولاد")
+        name:
+          type: string
+          description: Company name in Persian
+        type:
+          type: string
+          description: Symbol type (Stock, Index, Currency, OTC)
+        exchange:
+          type: string
+          description: Exchange (TSE, OTC)
+        industry:
+          type: string
+          description: Industry classification
+        sector:
+          type: string
+          description: Sector classification
+        webid:
+          type: string
+          description: Web ID from TSE
+        country:
+          type: string
+          description: Country code (e.g., IR)
+        currency:
+          type: string
+          description: Currency (e.g., IRR)
+        is_active:
+          type: boolean
+          description: Whether symbol is active
+        created_at:
+          type: string
+          format: date-time
+          description: Record creation timestamp
+
+    PriceData:
+      type: object
+      properties:
+        date:
+          type: string
+          format: date
+          description: Trading date
+        open:
+          type: number
+          format: float
+          description: Opening price
+        high:
+          type: number
+          format: float
+          description: Highest price
+        low:
+          type: number
+          format: float
+          description: Lowest price
+        close:
+          type: number
+          format: float
+          description: Closing price
+        volume:
+          type: integer
+          description: Trading volume
+        value:
+          type: number
+          format: float
+          description: Total transaction value
+        sma_20:
+          type: number
+          format: float
+          description: 20-period simple moving average
+        sma_50:
+          type: number
+          format: float
+          description: 50-period simple moving average
+        rsi:
+          type: number
+          format: float
+          description: Relative Strength Index
+        macd:
+          type: number
+          format: float
+          description: Moving Average Convergence Divergence
+        macd_signal:
+          type: number
+          format: float
+          description: MACD signal line
+        macd_histogram:
+          type: number
+          format: float
+          description: MACD histogram
+        bb_upper:
+          type: number
+          format: float
+          description: Bollinger Band upper
+        bb_lower:
+          type: number
+          format: float
+          description: Bollinger Band lower
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Error message
+        traceback:
+          type: string
+          description: Stack trace (debug only)
+      required: [error]
+
+paths:
+  /:
+    get:
+      summary: API health check
+      description: Check if API is running
+      operationId: index
+      tags:
+        - general
+      responses:
+        '200':
+          description: API status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [running]
+                  version:
+                    type: string
+
+  /api/symbols:
+    get:
+      summary: Get all active symbols
+      description: Retrieve all active symbols from the database
+      operationId: get_symbols
+      tags:
+        - symbols
+      responses:
+        '200':
+          description: List of symbols
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Symbol'
+        '404':
+          description: No symbols found
+          content:
+            application/json:
+              $ref: '#/components/schemas/ErrorResponse'
+
+  /api/data/{symbol}:
+    get:
+      summary: Get price data for symbol (summary)
+      description: Get recent price data for a specific symbol
+      operationId: get_data
+      tags:
+        - data
+      parameters:
+        - name: symbol
+          in: path
+          required: true
+          description: Stock symbol (e.g., "فولاد")
+      responses:
+        '200':
+          description: Price data entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PriceData'
+        '404':
+          description: No data found for symbol
+          content:
+            application/json:
+              $ref: '#/components/schemas/ErrorResponse'
+
+  /api/indices:
+    get:
+      summary: Get market indices data
+      description: Retrieve market indices (TEPIX, IFX, etc.)
+      operationId: get_indices
+      tags:
+        - indices
+      responses:
+        '200':
+          description: List of indices data
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    symbol_id:
+                      type: integer
+                    symbol:
+                      type: string
+                    date:
+                      type: string
+                      format: date
+                    close:
+                      type: number
+                      format: float
+                    open:
+                      type: number
+                      format: float
+                    high:
+                      type: number
+                      format: float
+                    low:
+                      type: number
+                      format: float
+                    volume:
+                      type: integer
+                    value:
+                      type: number
+                      format: float
+
+  /api/price/<symbol>:
+    get:
+      summary: Get price data for symbol (summary only)
+      description: Get recent price data (summary fields) for a specific symbol
+      operationId: get_price
+      tags:
+        - data
+      parameters:
+        - name: symbol
+          in: path
+          required: true
+          description: Stock symbol
+      responses:
+        '200':
+          description: Price data entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    Date:
+                      type: string
+                      format: date
+                    Open:
+                      type: number
+                      format: float
+                    High:
+                      type: number
+                      format: float
+                    Low:
+                      type: number
+                      format: float
+                    Close:
+                      type: number
+                      format: float
+                    Volume:
+                      type: integer
+                    Value:
+                      type: number
+                      format: float
+
+  /api/price-data/<symbol>:
+    get:
+      summary: Get comprehensive price data for symbol
+      description: Get comprehensive price data including technical indicators
+      operationId: get_price_data
+      tags:
+        - data
+      parameters:
+        - name: symbol
+          in: path
+          required: true
+          description: Stock symbol (e.g., "فولاد")
+      responses:
+        '200':
+          description: Comprehensive price data
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    Date:
+                      type: string
+                      format: date
+                    Open:
+                      type: number
+                      format: float
+                    High:
+                      type: number
+                      format: float
+                    Low:
+                      type: number
+                      format: float
+                    Close:
+                      type: number
+                      format: float
+                    Volume:
+                      type: integer
+                    Value:
+                      type: number
+                      format: float
+                    sma_20:
+                      type: number
+                      format: float
+                    sma_50:
+                      type: number
+                      format: float
+                    sma_100:
+                      type: number
+                      format: float
+                    rsi:
+                      type: number
+                      format: float
+                    macd:
+                      type: number
+                      format: float
+                    macd_signal:
+                      type: number
+                      format: float
+                    macd_histogram:
+                      type: number
+                      format: float
+                    bb_upper:
+                      type: number
+                      format: float
+                    bb_lower:
+                      type: number
+                      format: float
+                    adx:
+                      type: number
+                      format: float
+                    cci:
+                      type: number
+                      format: float
+                    mfi:
+                      type: number
+                      format: float
+                    ma_100:
+                      type: number
+                      format: float
+        '404':
+          description: No data found for symbol
+          content:
+            application/json:
+              $ref: '#/components/schemas/ErrorResponse'
+
+  /api/analysis/save:
+    post:
+      summary: Save analysis data
+      description: Save analysis notes and target prices for a symbol
+      operationId: save_analysis
+      tags:
+        - analysis
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - symbol
+                - analysis
+              properties:
+                symbol:
+                  type: string
+                  description: Stock symbol
+                analysis:
+                  type: string
+                  description: Analysis text
+                target_price:
+                  type: number
+                  format: float
+                  description: Target price (optional)
+                stop_loss:
+                  type: number
+                  format: float
+                  description: Stop loss price (optional)
+                timestamp:
+                  type: string
+                  format: date-time
+                  description: Analysis timestamp (optional)
+      responses:
+        '200':
+          description: Analysis saved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  filename:
+                    type: string
+                    description: Saved filename
+                  message:
+                    type: string
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              $ref: '#/components/schemas/ErrorResponse'
+
+  /api/download/{symbol}/{download_type}:
+    get:
+      summary: Download data for symbol
+      description: Download price data, indicators, or full dataset in CSV format
+      operationId: download_file
+      tags:
+        - download
+      parameters:
+        - name: symbol
+          in: path
+          required: true
+          description: Stock symbol
+        - name: download_type
+          in: path
+          required: true
+          description: Type of data to download (price, indicators, full)
+      responses:
+        '200':
+          description: CSV data file
+          content:
+            text/csv:
+              schema:
+                type: string
+                format: byte
+        '400':
+          description: Invalid download type
+          content:
+            application/json:
+              $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: No data found
+          content:
+            application/json:
+              $ref: '#/components/schemas/ErrorResponse'
+
+security:
+  - apiKey: []
+  - basic: []
+
+  apiKey:
+    type: apiKey
+    in: header
+    name: Authorization
+
+  basic:
+    type: http
+    scheme: basic
+    bearerFormat: JWT
