@@ -1,0 +1,10 @@
+import sqlite3
+conn = sqlite3.connect('data/market_data.db')
+c = conn.cursor()
+c.execute('SELECT COUNT(*) FROM symbols')
+print('Total symbols catalogued:', c.fetchone()[0])
+c.execute('SELECT COUNT(DISTINCT symbol_id) FROM price_data')
+print('Symbols with price data:', c.fetchone()[0])
+c.execute('SELECT COUNT(*) FROM price_data')
+print('Total price data rows:', c.fetchone()[0])
+conn.close()
